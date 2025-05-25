@@ -91,26 +91,19 @@ const ERC20_ABI = [
 ];
 
 function App() {
-  // 3) URL-Parameter (orderId, name, email, amount) auslesen
+  // 3) URL-Parameter (orderId + token) auslesen
   const [orderId, setOrderId] = useState("");
+  const [token, setToken] = useState("");
+
+  // 4) Bestelldaten vom Backend (erst nach GET-Validierung)
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [cartValueEUR, setCartValueEUR] = useState(0);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const orderIdParam = params.get("orderId");
-    const nameParam = params.get("name");
-    const emailParam = params.get("email");
-    const amountParam = parseFloat(params.get("amount"));
+  // 5) Weitere State-Variablen
+  const [validating, setValidating] = useState(true); // Während GET-Request läuft
+  const [validOrder, setValidOrder] = useState(false);
 
-    if (orderIdParam) setOrderId(orderIdParam);
-    if (nameParam) setCustomerName(nameParam);
-    if (emailParam) setCustomerEmail(emailParam);
-    if (!isNaN(amountParam)) setCartValueEUR(amountParam);
-  }, []);
-
-  // 4) Weitere State-Variablen
   const [selectedChain, setSelectedChain] = useState("eth");
   const [selectedCoin, setSelectedCoin] = useState("ETH");
   const [priceEUR, setPriceEUR] = useState(null);
@@ -128,7 +121,77 @@ function App() {
 
   const web3Modal = new Web3Modal({ cacheProvider: true });
 
-  // 5) Countdown-Timer (tickt jede Sekunde)
+  // ───────────────────────────────────────────────────────────────────
+  // 6) 1. useEffect: Nur orderId + token aus URL einlesen und validieren
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderIdParam = params.get("orderId");
+    const tokenParam = params.get("token");
+
+    if (!orderIdParam || !tokenParam) {
+      // Fehlende Parameter → sofort auf Fehlerseite
+      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+      return;
+    }
+
+    setOrderId(orderIdParam);
+    setToken(tokenParam);
+
+    // Jetzt zum Backend gehen und validieren
+    (async () => {
+      try {
+        const res = await fetch(
+          `https://www.goldsilverstuff.com/_functions/web3zahlung?orderId=${encodeURIComponent(
+            orderIdParam
+          )}&token=${encodeURIComponent(tokenParam)}`,
+          {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+        if (!res.ok) {
+          // Nicht 200 OK → ungültige Bestellung oder Token
+          window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+          return;
+        }
+        const data = await res.json();
+        // data enthält { orderId, name, email, warenkorbWert }
+        setCustomerName(data.name);
+        setCustomerEmail(data.email);
+        setCartValueEUR(data.warenkorbWert);
+        setValidOrder(true);
+      } catch (e) {
+        console.error("Validierungsfehler:", e);
+        window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+      } finally {
+        setValidating(false);
+      }
+    })();
+  }, []);
+
+  // 7) 2. useEffect: CoinGecko-Live-Preisabruf (läuft nur, wenn Bestellung validiert ist)
+  useEffect(() => {
+    if (!validOrder) return;
+    async function fetchPrice() {
+      try {
+        const coinId = chains[selectedChain].coins[selectedCoin].coingeckoId;
+        const res = await axios.get(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur`
+        );
+        const eur = res.data[coinId]?.eur;
+        setPriceEUR(eur);
+        if (eur && cartValueEUR > 0) {
+          setCryptoAmount((cartValueEUR / eur).toFixed(6));
+        }
+      } catch (e) {
+        console.error("Preisabruf-Fehler:", e);
+        setError("Fehler beim Abrufen des Kurses");
+      }
+    }
+    fetchPrice();
+  }, [validOrder, selectedChain, selectedCoin, cartValueEUR]);
+
+  // 8) 3. Countdown-Timer (tickt jede Sekunde, wenn validOrder=true)
   useEffect(() => {
     if (!timerActive) return;
     if (timer <= 0) {
@@ -139,30 +202,7 @@ function App() {
     return () => clearTimeout(interval);
   }, [timer, timerActive]);
 
-  // 6) CoinGecko-Live-Preisabruf
-  useEffect(() => {
-    async function fetchPrice() {
-      try {
-        const coinId = chains[selectedChain].coins[selectedCoin].coingeckoId;
-        const res = await axios.get(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur`
-        );
-        const eur = res.data[coinId]?.eur;
-        setPriceEUR(eur);
-
-        if (eur && cartValueEUR > 0) {
-          setCryptoAmount((cartValueEUR / eur).toFixed(6));
-        }
-      } catch (e) {
-        console.error("Preisabruf-Fehler:", e);
-        setError("Fehler beim Abrufen des Kurses");
-      }
-    }
-
-    fetchPrice();
-  }, [selectedChain, selectedCoin, cartValueEUR]);
-
-  // 7) Wallet verbinden
+  // 9) Wallet verbinden
   async function connectWallet() {
     try {
       const instance = await web3Modal.connect();
@@ -190,7 +230,7 @@ function App() {
     }
   }
 
-  // 8) Wallet trennen
+  // 10) Wallet trennen
   function disconnectWallet() {
     web3Modal.clearCachedProvider();
     setProvider(null);
@@ -203,16 +243,15 @@ function App() {
     setError("");
   }
 
-  // 9) Timer-Abbruch
+  // 11) Timer-Abbruch (falls Zeit abläuft)
   function handleAbort() {
     setTimerActive(false);
     setTxStatus("");
     setError("Zeit abgelaufen. Zahlung abgebrochen.");
-    // Redirect zu fehlerhafter Zahlung
     window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
   }
 
-  // 10) Zahlung absenden & Daten an Wix-Backend senden
+  // 12) Zahlung absenden & POST-Request an Wix (nur wenn validOrder=false ist, alles validiert)
   async function sendPayment() {
     setError("");
     setTxStatus("");
@@ -231,7 +270,7 @@ function App() {
     }
 
     try {
-      // 1) Signatur-Nachricht
+      // 1) Signatur-Nachricht erstellen und signen
       const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin}`;
       await signer.signMessage(message);
 
@@ -261,7 +300,7 @@ function App() {
 
       setTxStatus("Zahlung bestätigt!");
 
-      // 4) Daten an dein Wix-Backend senden
+      // 4) Daten (inkl. orderId + token) an dein Wix-Backend senden
       await fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
         method: "POST",
         headers: {
@@ -269,13 +308,12 @@ function App() {
         },
         body: JSON.stringify({
           orderId: orderId,
-          email: customerEmail,
-          warenkorbWert: cartValueEUR,
+          token: token,
           coin: selectedCoin,
           chain: selectedChain,
           walletAdresse: address,
           cryptoAmount: cryptoAmount,
-          txHash: txHash,
+          txHash: txHash
         }),
       });
 
@@ -289,7 +327,19 @@ function App() {
     }
   }
 
-  // 11) JSX-Rendering
+  // ───────────────────────────────────────────────────────────────────
+  // 13) JSX-Rendering
+
+  // Solange validating=true, noch nichts anzeigen (oder ein Loading)
+  if (validating) {
+    return (
+      <div style={{ textAlign: "center", marginTop: 50 }}>
+        <p>Lade Bestelldaten…</p>
+      </div>
+    );
+  }
+
+  // Wenn validOrder=false, würde bereits redirect passieren. Hier gilt: validOrder===true
   return (
     <div style={{ maxWidth: 480, margin: "auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
       {/* Firmenlogo */}
@@ -329,7 +379,6 @@ function App() {
           value={selectedChain}
           onChange={(e) => {
             setSelectedChain(e.target.value);
-            // Reset Coin zur ersten Auswahl der neuen Chain
             setSelectedCoin(Object.keys(chains[e.target.value].coins)[0]);
           }}
         >
