@@ -86,7 +86,7 @@ function App() {
       try {
         const coinId = chains[selectedChain].coins[selectedCoin].coingeckoId;
         const res = await axios.get(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur`
+          https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur
         );
         const eur = res.data[coinId]?.eur;
         setPriceEUR(eur);
@@ -162,7 +162,7 @@ function App() {
       return;
     }
     if (chainId !== chains[selectedChain].chainId) {
-      setError(`Bitte Wallet auf ${chains[selectedChain].name} umstellen`);
+      setError(Bitte Wallet auf ${chains[selectedChain].name} umstellen);
       return;
     }
     if (!cryptoAmount || isNaN(cryptoAmount) || Number(cryptoAmount) <= 0) {
@@ -172,10 +172,10 @@ function App() {
 
     try {
       // Signiere zuerst eine Bestätigungsnachricht
-      const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin}`;
+      const message = Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin};
       await signer.signMessage(message);
 
-      const recipient = "DEINE_WALLET_ADRESSE_HIER";
+      const recipient = "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb";
       const coinInfo = chains[selectedChain].coins[selectedCoin];
 
       setTxStatus("Transaktion läuft...");
@@ -195,12 +195,12 @@ function App() {
         await tx.wait();
       }
       setTxStatus("Zahlung bestätigt!");
-      window.location.href = "/zahlung-erfolgreich"; // Passe an deine URL an
+      window.location.href = "https://www.goldsilverstuff.com/zahlung-erfolgreich"; // Passe an deine URL an
     } catch (e) {
       console.error(e);
       setError("Zahlung fehlgeschlagen");
       setTxStatus("");
-      window.location.href = "/zahlung-abgebrochen";
+      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
     }
   }
 
@@ -283,11 +283,11 @@ function App() {
       {/* Live-Umrechnung */}
       <p>
         <strong>Aktueller Preis:</strong>{" "}
-        {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}
+        {priceEUR ? ${priceEUR.toFixed(2)} EUR : "Lade..."}
       </p>
       <p>
         <strong>Betrag in {selectedCoin}:</strong>{" "}
-        {cryptoAmount ? `${cryptoAmount} ${selectedCoin}` : "—"}
+        {cryptoAmount ? ${cryptoAmount} ${selectedCoin} : "—"}
       </p>
 
       <br />
