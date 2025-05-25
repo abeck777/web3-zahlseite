@@ -34,7 +34,7 @@ const chains = {
     coins: {
       MATIC: { address: null, coingeckoId: "matic-network" },
       USDT: { address: "0x3813e82e6f7098b9583FC0F33a962D02018B6803", coingeckoId: "tether" },
-      USDC: { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeckoId: "usd-coin" },
+      USDC: { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeId: "usd-coin" },
       DAI: { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
       LINK: { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
       AAVE: { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
@@ -42,20 +42,21 @@ const chains = {
   },
 };
 
-// 2) Minimaler ERC20-ABI fürs Token-Transfer
 const ERC20_ABI = [
   "function transfer(address to, uint amount) returns (bool)",
   "function decimals() view returns (uint8)",
 ];
 
 function App() {
-  // --- State-Variablen ---
   const [selectedChain, setSelectedChain] = useState("eth");
   const [selectedCoin, setSelectedCoin] = useState("ETH");
-  const [cartValueEUR] = useState(129.95); // Hardcoded Warenkorbwert
+  const [cartValueEUR, setCartValueEUR] = useState(0);
+  const [orderId, setOrderId] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [priceEUR, setPriceEUR] = useState(null);
   const [cryptoAmount, setCryptoAmount] = useState("");
-  const [timer, setTimer] = useState(180); // 3 Minuten in Sekunden
+  const [timer, setTimer] = useState(180);
   const [timerActive, setTimerActive] = useState(false);
 
   const [provider, setProvider] = useState(null);
@@ -68,11 +69,22 @@ function App() {
 
   const web3Modal = new Web3Modal({ cacheProvider: true });
 
-  // 3) Countdown-Timer-Logik (tickt jede Sekunde)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const amount = parseFloat(params.get("amount"));
+    const orderIdParam = params.get("orderId");
+    const nameParam = params.get("name");
+    const emailParam = params.get("email");
+
+    if (!isNaN(amount)) setCartValueEUR(amount);
+    if (orderIdParam) setOrderId(orderIdParam);
+    if (nameParam) setCustomerName(nameParam);
+    if (emailParam) setCustomerEmail(emailParam);
+  }, []);
+
   useEffect(() => {
     if (!timerActive) return;
     if (timer <= 0) {
-      // Timer abgelaufen → Abbruch
       handleAbort();
       return;
     }
@@ -80,13 +92,12 @@ function App() {
     return () => clearTimeout(interval);
   }, [timer, timerActive]);
 
-  // 4) CoinGecko-Abruf: Live-Preis in EUR
   useEffect(() => {
     async function fetchPrice() {
       try {
         const coinId = chains[selectedChain].coins[selectedCoin].coingeckoId;
         const res = await axios.get(
-          https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur`
         );
         const eur = res.data[coinId]?.eur;
         setPriceEUR(eur);
@@ -101,9 +112,8 @@ function App() {
     setPriceEUR(null);
     setCryptoAmount("");
     fetchPrice();
-  }, [selectedChain, selectedCoin]);
+  }, [selectedChain, selectedCoin, cartValueEUR]);
 
-  // 5) Wallet-Verbindung
   async function connectWallet() {
     try {
       const instance = await web3Modal.connect();
@@ -117,7 +127,6 @@ function App() {
       setAddress(addr);
       setChainId(network.chainId);
 
-      // Reset & starte Timer
       setTimer(180);
       setTimerActive(true);
 
@@ -145,15 +154,13 @@ function App() {
     setTimer(180);
   }
 
-  // 6) Abbruch-Routine (Timer oder Fenster schließen)
   function handleAbort() {
     setTimerActive(false);
     setTxStatus("");
     setError("Zeit abgelaufen. Zahlung abgebrochen.");
-    window.location.href = "/zahlung-abgebrochen"; // Passe an deine URL an
+    window.location.href = "/zahlung-abgebrochen";
   }
 
-  // 7) Zahlung absenden
   async function sendPayment() {
     setError("");
     setTxStatus("");
@@ -162,7 +169,7 @@ function App() {
       return;
     }
     if (chainId !== chains[selectedChain].chainId) {
-      setError(Bitte Wallet auf ${chains[selectedChain].name} umstellen);
+      setError(`Bitte Wallet auf ${chains[selectedChain].name} umstellen`);
       return;
     }
     if (!cryptoAmount || isNaN(cryptoAmount) || Number(cryptoAmount) <= 0) {
@@ -171,23 +178,20 @@ function App() {
     }
 
     try {
-      // Signiere zuerst eine Bestätigungsnachricht
-      const message = Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin};
+      const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin}`;
       await signer.signMessage(message);
 
-      const recipient = "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb";
+      const recipient = "DEINE_WALLET_ADRESSE_HIER";
       const coinInfo = chains[selectedChain].coins[selectedCoin];
 
       setTxStatus("Transaktion läuft...");
       if (coinInfo.address === null) {
-        // Native Coin (z. B. ETH, BNB, MATIC)
         const tx = await signer.sendTransaction({
           to: recipient,
           value: ethers.parseEther(cryptoAmount),
         });
         await tx.wait();
       } else {
-        // ERC20 Token
         const contract = new ethers.Contract(coinInfo.address, ERC20_ABI, signer);
         const decimals = await contract.decimals();
         const value = ethers.parseUnits(cryptoAmount, decimals);
@@ -195,104 +199,73 @@ function App() {
         await tx.wait();
       }
       setTxStatus("Zahlung bestätigt!");
-      window.location.href = "https://www.goldsilverstuff.com/zahlung-erfolgreich"; // Passe an deine URL an
+      window.location.href = "/zahlung-erfolgreich";
     } catch (e) {
       console.error(e);
       setError("Zahlung fehlgeschlagen");
       setTxStatus("");
-      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+      window.location.href = "/zahlung-abgebrochen";
     }
   }
 
   return (
-    <div
-      style={{
-        maxWidth: 480,
-        margin: "auto",
-        padding: 20,
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      {/* 8) Firmenlogo */}
+    <div style={{ maxWidth: 480, margin: "auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <img
-          src="/logo.png"
-          alt="Firmenlogo"
-          style={{ maxWidth: 200 }}
-        />
+        <img src="/logo.png" alt="Firmenlogo" style={{ maxWidth: 200 }} />
       </div>
 
       <h2>Web3 Premium Checkout</h2>
 
-      {/* Warenkorbwert & Timer */}
       <p>
         <strong>Warenkorb:</strong> {cartValueEUR.toFixed(2)} EUR
       </p>
+      {customerName && (
+        <p><strong>Kunde:</strong> {customerName}</p>
+      )}
+      {orderId && (
+        <p><strong>Bestell-ID:</strong> {orderId}</p>
+      )}
       <p>
         <strong>Zeit verbleibend:</strong>{" "}
-        {timerActive ? (
-          <>{timer}s</>
-        ) : (
-          <span style={{ color: "#c00" }}>Inaktiv</span>
-        )}
+        {timerActive ? <>{timer}s</> : <span style={{ color: "#c00" }}>Inaktiv</span>}
       </p>
 
-      {/* Chain-Auswahl */}
       <label>
         Chain auswählen:&nbsp;
-        <select
-          value={selectedChain}
-          onChange={(e) => {
-            setSelectedChain(e.target.value);
-            setSelectedCoin(
-              Object.keys(chains[e.target.value].coins)[0]
-            );
-          }}
-        >
+        <select value={selectedChain} onChange={(e) => {
+          setSelectedChain(e.target.value);
+          setSelectedCoin(Object.keys(chains[e.target.value].coins)[0]);
+        }}>
           {Object.keys(chains).map((key) => (
-            <option key={key} value={key}>
-              {chains[key].name}
-            </option>
+            <option key={key} value={key}>{chains[key].name}</option>
           ))}
         </select>
       </label>
 
-      <br />
-      <br />
+      <br /><br />
 
-      {/* Coin-Auswahl */}
       <label>
         Coin auswählen:&nbsp;
-        <select
-          value={selectedCoin}
-          onChange={(e) => setSelectedCoin(e.target.value)}
-        >
-          {Object.keys(chains[selectedChain].coins).map(
-            (coin) => (
-              <option key={coin} value={coin}>
-                {coin}
-              </option>
-            )
-          )}
+        <select value={selectedCoin} onChange={(e) => setSelectedCoin(e.target.value)}>
+          {Object.keys(chains[selectedChain].coins).map((coin) => (
+            <option key={coin} value={coin}>{coin}</option>
+          ))}
         </select>
       </label>
 
-      <br />
-      <br />
+      <br /><br />
 
-      {/* Live-Umrechnung */}
       <p>
         <strong>Aktueller Preis:</strong>{" "}
-        {priceEUR ? ${priceEUR.toFixed(2)} EUR : "Lade..."}
+        {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}
       </p>
       <p>
         <strong>Betrag in {selectedCoin}:</strong>{" "}
-        {cryptoAmount ? ${cryptoAmount} ${selectedCoin} : "—"}
+        {cryptoAmount ? `${cryptoAmount} ${selectedCoin}` : "—"}
       </p>
 
       <br />
 
-      {/* Wallet-Verbindung & Bezahl-Button */}
       {!signer ? (
         <button onClick={connectWallet} style={{ padding: "10px 20px" }}>
           Wallet verbinden
@@ -300,33 +273,26 @@ function App() {
       ) : (
         <>
           <p>
-            <strong>Verbunden:</strong>{" "}
-            {address.substring(0, 6)}…{address.slice(-4)}
+            <strong>Verbunden:</strong> {address.substring(0, 6)}…{address.slice(-4)}
           </p>
           <button onClick={sendPayment} style={{ padding: "10px 20px" }}>
             Zahlung senden
           </button>
-          <button
-            onClick={disconnectWallet}
-            style={{ marginLeft: 10, padding: "10px 20px" }}
-          >
+          <button onClick={disconnectWallet} style={{ marginLeft: 10, padding: "10px 20px" }}>
             Wallet trennen
           </button>
         </>
       )}
 
-      <br />
-      <br />
+      <br /><br />
 
-      {/* Statusmeldungen */}
       {txStatus && <p style={{ color: "green" }}>{txStatus}</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
       <hr />
 
       <p style={{ fontSize: "0.8em", color: "#555" }}>
-        ⚠️ Kryptowährungen schwanken im Kurs. Zahlungen sind
-        unwiderruflich. Bitte prüfe Chain & Coin sorgfältig.
+        ⚠️ Kryptowährungen schwanken im Kurs. Zahlungen sind unwiderruflich. Bitte prüfe Chain & Coin sorgfältig.
       </p>
     </div>
   );
