@@ -10,13 +10,34 @@ const chains = {
     chainId: 1,
     coins: {
       ETH: { address: null, coingeckoId: "ethereum" },
-      USDC: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606EB48", coingeckoId: "usd-coin" },
-      USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", coingeckoId: "tether" },
-      DAI: { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", coingeckoId: "dai" },
-      SHIB: { address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", coingeckoId: "shiba-inu" },
-      LINK: { address: "0x514910771AF9Ca656af840dff83E8264EcF986CA", coingeckoId: "chainlink" },
-      AAVE: { address: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9", coingeckoId: "aave" },
-      GRT: { address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", coingeckoId: "the-graph" },
+      USDC: {
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606EB48",
+        coingeckoId: "usd-coin",
+      },
+      USDT: {
+        address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        coingeckoId: "tether",
+      },
+      DAI: {
+        address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        coingeckoId: "dai",
+      },
+      SHIB: {
+        address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+        coingeckoId: "shiba-inu",
+      },
+      LINK: {
+        address: "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+        coingeckoId: "chainlink",
+      },
+      AAVE: {
+        address: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+        coingeckoId: "aave",
+      },
+      GRT: {
+        address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7",
+        coingeckoId: "the-graph",
+      },
     },
   },
   bnb: {
@@ -24,8 +45,14 @@ const chains = {
     chainId: 56,
     coins: {
       BNB: { address: null, coingeckoId: "binancecoin" },
-      USDT: { address: "0x55d398326f99059fF775485246999027B3197955", coingeckoId: "tether" },
-      USDC: { address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", coingeckoId: "usd-coin" },
+      USDT: {
+        address: "0x55d398326f99059fF775485246999027B3197955",
+        coingeckoId: "tether",
+      },
+      USDC: {
+        address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        coingeckoId: "usd-coin",
+      },
     },
   },
   matic: {
@@ -33,11 +60,26 @@ const chains = {
     chainId: 137,
     coins: {
       MATIC: { address: null, coingeckoId: "matic-network" },
-      USDT: { address: "0x3813e82e6f7098b9583FC0F33a962D02018B6803", coingeckoId: "tether" },
-      USDC: { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeId: "usd-coin" },
-      DAI: { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
-      LINK: { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
-      AAVE: { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
+      USDT: {
+        address: "0x3813e82e6f7098b9583FC0F33a962D02018B6803",
+        coingeckoId: "tether",
+      },
+      USDC: {
+        address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+        coingeckoId: "usd-coin",
+      },
+      DAI: {
+        address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+        coingeckoId: "dai",
+      },
+      LINK: {
+        address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39",
+        coingeckoId: "chainlink",
+      },
+      AAVE: {
+        address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b",
+        coingeckoId: "aave",
+      },
     },
   },
 };
@@ -49,17 +91,20 @@ const ERC20_ABI = [
 ];
 
 function App() {
-  // 3) URL-Parameter (Warenkorb, Kundenname, E-Mail) auslesen
+  // 3) URL-Parameter (orderId, name, email, amount) auslesen
+  const [orderId, setOrderId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [cartValueEUR, setCartValueEUR] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const orderIdParam = params.get("orderId");
     const nameParam = params.get("name");
     const emailParam = params.get("email");
     const amountParam = parseFloat(params.get("amount"));
 
+    if (orderIdParam) setOrderId(orderIdParam);
     if (nameParam) setCustomerName(nameParam);
     if (emailParam) setCustomerEmail(emailParam);
     if (!isNaN(amountParam)) setCartValueEUR(amountParam);
@@ -163,10 +208,11 @@ function App() {
     setTimerActive(false);
     setTxStatus("");
     setError("Zeit abgelaufen. Zahlung abgebrochen.");
+    // Redirect zu fehlerhafter Zahlung
     window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
   }
 
-  // 10) Zahlung absenden
+  // 10) Zahlung absenden & Daten an Wix-Backend senden
   async function sendPayment() {
     setError("");
     setTxStatus("");
@@ -185,37 +231,60 @@ function App() {
     }
 
     try {
-      // Signatur-Nachricht
+      // 1) Signatur-Nachricht
       const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin}`;
       await signer.signMessage(message);
 
-      // Hier kommt deine tatsächliche Empfangsadresse rein:
+      // 2) Transaktion ausführen
       const recipient = "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb";
       const coinInfo = chains[selectedChain].coins[selectedCoin];
+      let txResponse;
 
       setTxStatus("Transaktion läuft...");
       if (coinInfo.address === null) {
         // Native Coin (ETH/BNB/MATIC)
-        const tx = await signer.sendTransaction({
+        txResponse = await signer.sendTransaction({
           to: recipient,
           value: ethers.parseEther(cryptoAmount),
         });
-        await tx.wait();
       } else {
         // ERC20-Token
         const contract = new ethers.Contract(coinInfo.address, ERC20_ABI, signer);
         const decimals = await contract.decimals();
         const value = ethers.parseUnits(cryptoAmount, decimals);
-        const tx = await contract.transfer(recipient, value);
-        await tx.wait();
+        txResponse = await contract.transfer(recipient, value);
       }
 
+      // 3) Auf Bestätigung der Transaktion warten
+      const receipt = await txResponse.wait();
+      const txHash = receipt.transactionHash;
+
       setTxStatus("Zahlung bestätigt!");
-      // Auf deine Erfolgsseite weiterleiten:
+
+      // 4) Daten an dein Wix-Backend senden
+      await fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: orderId,
+          email: customerEmail,
+          warenkorbWert: cartValueEUR,
+          coin: selectedCoin,
+          chain: selectedChain,
+          walletAdresse: address,
+          cryptoAmount: cryptoAmount,
+          txHash: txHash,
+        }),
+      });
+
+      // 5) Redirect bei Erfolg
       window.location.href = "https://www.goldsilverstuff.com/zahlung-erfolgreich";
     } catch (e) {
       console.error("sendPayment-Fehler:", e);
       setError("Zahlung fehlgeschlagen");
+      // Redirect bei Fehler
       window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
     }
   }
@@ -239,6 +308,11 @@ function App() {
       {customerEmail && (
         <p>
           <strong>E-Mail:</strong> {customerEmail}
+        </p>
+      )}
+      {orderId && (
+        <p>
+          <strong>Bestell-ID:</strong> {orderId}
         </p>
       )}
       <p>
