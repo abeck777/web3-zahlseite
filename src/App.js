@@ -42,21 +42,35 @@ const chains = {
   },
 };
 
+// 2) Minimaler ERC20-ABI fürs Token-Transfer
 const ERC20_ABI = [
   "function transfer(address to, uint amount) returns (bool)",
   "function decimals() view returns (uint8)",
 ];
 
 function App() {
-  const [selectedChain, setSelectedChain] = useState("eth");
-  const [selectedCoin, setSelectedCoin] = useState("ETH");
-  const [cartValueEUR, setCartValueEUR] = useState(0);
-  const [orderId, setOrderId] = useState("");
+  // 3) URL-Parameter (Warenkorb, Kundenname, E-Mail) auslesen
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [cartValueEUR, setCartValueEUR] = useState(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nameParam = params.get("name");
+    const emailParam = params.get("email");
+    const amountParam = parseFloat(params.get("amount"));
+
+    if (nameParam) setCustomerName(nameParam);
+    if (emailParam) setCustomerEmail(emailParam);
+    if (!isNaN(amountParam)) setCartValueEUR(amountParam);
+  }, []);
+
+  // 4) Weitere State-Variablen
+  const [selectedChain, setSelectedChain] = useState("eth");
+  const [selectedCoin, setSelectedCoin] = useState("ETH");
   const [priceEUR, setPriceEUR] = useState(null);
   const [cryptoAmount, setCryptoAmount] = useState("");
-  const [timer, setTimer] = useState(180);
+  const [timer, setTimer] = useState(180); // 3 Minuten
   const [timerActive, setTimerActive] = useState(false);
 
   const [provider, setProvider] = useState(null);
@@ -69,19 +83,7 @@ function App() {
 
   const web3Modal = new Web3Modal({ cacheProvider: true });
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const amount = parseFloat(params.get("amount"));
-    const orderIdParam = params.get("orderId");
-    const nameParam = params.get("name");
-    const emailParam = params.get("email");
-
-    if (!isNaN(amount)) setCartValueEUR(amount);
-    if (orderIdParam) setOrderId(orderIdParam);
-    if (nameParam) setCustomerName(nameParam);
-    if (emailParam) setCustomerEmail(emailParam);
-  }, []);
-
+  // 5) Countdown-Timer (tickt jede Sekunde)
   useEffect(() => {
     if (!timerActive) return;
     if (timer <= 0) {
@@ -92,6 +94,7 @@ function App() {
     return () => clearTimeout(interval);
   }, [timer, timerActive]);
 
+  // 6) CoinGecko-Live-Preisabruf
   useEffect(() => {
     async function fetchPrice() {
       try {
@@ -101,69 +104,73 @@ function App() {
         );
         const eur = res.data[coinId]?.eur;
         setPriceEUR(eur);
-        if (eur) {
+
+        if (eur && cartValueEUR > 0) {
           setCryptoAmount((cartValueEUR / eur).toFixed(6));
         }
       } catch (e) {
-        console.error(e);
+        console.error("Preisabruf-Fehler:", e);
         setError("Fehler beim Abrufen des Kurses");
       }
     }
-    setPriceEUR(null);
-    setCryptoAmount("");
+
     fetchPrice();
   }, [selectedChain, selectedCoin, cartValueEUR]);
 
+  // 7) Wallet verbinden
   async function connectWallet() {
     try {
       const instance = await web3Modal.connect();
       const prov = new ethers.BrowserProvider(instance);
-      const signer = await prov.getSigner();
-      const addr = await signer.getAddress();
+      const signerInstance = await prov.getSigner();
+      const addr = await signerInstance.getAddress();
       const network = await prov.getNetwork();
 
       setProvider(prov);
-      setSigner(signer);
+      setSigner(signerInstance);
       setAddress(addr);
       setChainId(network.chainId);
 
+      // Timer starten
       setTimer(180);
       setTimerActive(true);
 
-      instance.on("accountsChanged", (accounts) => {
-        setAddress(accounts[0]);
-      });
-      instance.on("chainChanged", (hex) => {
-        setChainId(parseInt(hex, 16));
-      });
+      // Event-Listener
+      instance.on("accountsChanged", (accounts) => setAddress(accounts[0]));
+      instance.on("chainChanged", (hex) => setChainId(parseInt(hex, 16)));
       instance.on("disconnect", disconnectWallet);
-    } catch {
+    } catch (e) {
+      console.error("connectWallet-Fehler:", e);
       setError("Wallet-Verbindung fehlgeschlagen");
     }
   }
 
+  // 8) Wallet trennen
   function disconnectWallet() {
     web3Modal.clearCachedProvider();
     setProvider(null);
     setSigner(null);
     setAddress("");
     setChainId(null);
-    setTxStatus("");
-    setError("");
     setTimerActive(false);
     setTimer(180);
+    setTxStatus("");
+    setError("");
   }
 
+  // 9) Timer-Abbruch
   function handleAbort() {
     setTimerActive(false);
     setTxStatus("");
     setError("Zeit abgelaufen. Zahlung abgebrochen.");
-    window.location.href = "/zahlung-abgebrochen";
+    window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
   }
 
+  // 10) Zahlung absenden
   async function sendPayment() {
     setError("");
     setTxStatus("");
+
     if (!signer) {
       setError("Bitte Wallet verbinden");
       return;
@@ -178,121 +185,147 @@ function App() {
     }
 
     try {
+      // Signatur-Nachricht
       const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin}`;
       await signer.signMessage(message);
 
-      const recipient = "DEINE_WALLET_ADRESSE_HIER";
+      // Hier kommt deine tatsächliche Empfangsadresse rein:
+      const recipient = "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb";
       const coinInfo = chains[selectedChain].coins[selectedCoin];
 
       setTxStatus("Transaktion läuft...");
       if (coinInfo.address === null) {
+        // Native Coin (ETH/BNB/MATIC)
         const tx = await signer.sendTransaction({
           to: recipient,
           value: ethers.parseEther(cryptoAmount),
         });
         await tx.wait();
       } else {
+        // ERC20-Token
         const contract = new ethers.Contract(coinInfo.address, ERC20_ABI, signer);
         const decimals = await contract.decimals();
         const value = ethers.parseUnits(cryptoAmount, decimals);
         const tx = await contract.transfer(recipient, value);
         await tx.wait();
       }
+
       setTxStatus("Zahlung bestätigt!");
-      window.location.href = "/zahlung-erfolgreich";
+      // Auf deine Erfolgsseite weiterleiten:
+      window.location.href = "https://www.goldsilverstuff.com/zahlung-erfolgreich";
     } catch (e) {
-      console.error(e);
+      console.error("sendPayment-Fehler:", e);
       setError("Zahlung fehlgeschlagen");
-      setTxStatus("");
-      window.location.href = "/zahlung-abgebrochen";
+      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
     }
   }
 
+  // 11) JSX-Rendering
   return (
     <div style={{ maxWidth: 480, margin: "auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
+      {/* Firmenlogo */}
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <img src="/logo.png" alt="Firmenlogo" style={{ maxWidth: 200 }} />
       </div>
 
-      <h2>Web3 Premium Checkout</h2>
+      <h2>Web3 Checkout</h2>
 
+      {/* Kunden- und Bestelldaten */}
+      {customerName && (
+        <p>
+          <strong>Kunde:</strong> {customerName}
+        </p>
+      )}
+      {customerEmail && (
+        <p>
+          <strong>E-Mail:</strong> {customerEmail}
+        </p>
+      )}
       <p>
         <strong>Warenkorb:</strong> {cartValueEUR.toFixed(2)} EUR
       </p>
-      {customerName && (
-        <p><strong>Kunde:</strong> {customerName}</p>
-      )}
-      {orderId && (
-        <p><strong>Bestell-ID:</strong> {orderId}</p>
-      )}
       <p>
-        <strong>Zeit verbleibend:</strong>{" "}
-        {timerActive ? <>{timer}s</> : <span style={{ color: "#c00" }}>Inaktiv</span>}
+        <strong>Zeit verbleibend:</strong> {timerActive ? `${timer}s` : <span style={{ color: "#c00" }}>Inaktiv</span>}
       </p>
 
+      {/* Chain-Auswahl */}
       <label>
         Chain auswählen:&nbsp;
-        <select value={selectedChain} onChange={(e) => {
-          setSelectedChain(e.target.value);
-          setSelectedCoin(Object.keys(chains[e.target.value].coins)[0]);
-        }}>
+        <select
+          value={selectedChain}
+          onChange={(e) => {
+            setSelectedChain(e.target.value);
+            // Reset Coin zur ersten Auswahl der neuen Chain
+            setSelectedCoin(Object.keys(chains[e.target.value].coins)[0]);
+          }}
+        >
           {Object.keys(chains).map((key) => (
-            <option key={key} value={key}>{chains[key].name}</option>
+            <option key={key} value={key}>
+              {chains[key].name}
+            </option>
           ))}
         </select>
       </label>
 
-      <br /><br />
+      <br />
+      <br />
 
+      {/* Coin-Auswahl */}
       <label>
         Coin auswählen:&nbsp;
         <select value={selectedCoin} onChange={(e) => setSelectedCoin(e.target.value)}>
           {Object.keys(chains[selectedChain].coins).map((coin) => (
-            <option key={coin} value={coin}>{coin}</option>
+            <option key={coin} value={coin}>
+              {coin}
+            </option>
           ))}
         </select>
       </label>
 
-      <br /><br />
+      <br />
+      <br />
 
+      {/* Live-Umrechnung anzeigen */}
       <p>
-        <strong>Aktueller Preis:</strong>{" "}
-        {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}
+        <strong>Aktueller Preis (EUR):</strong> {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}
       </p>
       <p>
-        <strong>Betrag in {selectedCoin}:</strong>{" "}
-        {cryptoAmount ? `${cryptoAmount} ${selectedCoin}` : "—"}
+        <strong>Betrag in {selectedCoin}:</strong> {cryptoAmount ? `${cryptoAmount} ${selectedCoin}` : "—"}
       </p>
 
       <br />
 
+      {/* Wallet-Verbindung & Zahlung */}
       {!signer ? (
-        <button onClick={connectWallet} style={{ padding: "10px 20px" }}>
+        <button onClick={connectWallet} style={{ padding: "10px 20px", cursor: "pointer" }}>
           Wallet verbinden
         </button>
       ) : (
         <>
           <p>
-            <strong>Verbunden:</strong> {address.substring(0, 6)}…{address.slice(-4)}
+            <strong>Verbunden mit:</strong> {address.slice(0, 6)}…{address.slice(-4)}
           </p>
-          <button onClick={sendPayment} style={{ padding: "10px 20px" }}>
+          <button onClick={sendPayment} style={{ padding: "10px 20px", cursor: "pointer" }}>
             Zahlung senden
           </button>
-          <button onClick={disconnectWallet} style={{ marginLeft: 10, padding: "10px 20px" }}>
+          <button onClick={disconnectWallet} style={{ marginLeft: 10, padding: "10px 20px", cursor: "pointer" }}>
             Wallet trennen
           </button>
         </>
       )}
 
-      <br /><br />
+      <br />
+      <br />
 
+      {/* Statusmeldungen */}
       {txStatus && <p style={{ color: "green" }}>{txStatus}</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
       <hr />
 
       <p style={{ fontSize: "0.8em", color: "#555" }}>
-        ⚠️ Kryptowährungen schwanken im Kurs. Zahlungen sind unwiderruflich. Bitte prüfe Chain & Coin sorgfältig.
+        ⚠️ Kryptowährungen unterliegen starken Kursschwankungen und Zahlungen sind unwiderruflich. Bitte prüfe Chain &
+        Coin sorgfältig.
       </p>
     </div>
   );
