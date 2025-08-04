@@ -133,7 +133,7 @@ function App() {
 
     if (!orderIdParam || !tokenParam) {
       // Fehlende Parameter → sofort auf Fehlerseite
-      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagene";
       return;
     }
 
