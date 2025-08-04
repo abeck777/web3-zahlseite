@@ -94,6 +94,9 @@ function App() {
   // 3) URL-Parameter (orderId + token) auslesen
   const [orderId, setOrderId] = useState("");
   const [token, setToken] = useState("");
+  const [chainKey, setChainKey] = useState("")
+  const [coinKey, setCoinKey] = useState("")
+  const [userId, setUserId] = useState("")
 
   // 4) Bestelldaten vom Backend (erst nach GET-Validierung)
   const [customerName, setCustomerName] = useState("");
@@ -104,8 +107,8 @@ function App() {
   const [validating, setValidating] = useState(true); // Während GET-Request läuft
   const [validOrder, setValidOrder] = useState(false);
 
-  const [selectedChain, setSelectedChain] = useState("eth");
-  const [selectedCoin, setSelectedCoin] = useState("ETH");
+  const selectedChain = chainKey;
+  const selectedCoin = coinKey;
   const [priceEUR, setPriceEUR] = useState(null);
   const [cryptoAmount, setCryptoAmount] = useState("");
   const [timer, setTimer] = useState(180); // 3 Minuten
@@ -155,10 +158,18 @@ function App() {
           return;
         }
         const data = await res.json();
+
+        if (!data.chain || !data,coin) {
+          window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+          return;
+        }
         // data enthält { orderId, name, email, warenkorbWert }
         setCustomerName(data.name);
         setCustomerEmail(data.email);
         setCartValueEUR(data.warenkorbWert);
+        setChainKey(data.chain)
+        setCoinKey(data.coin)
+        setUserId(data.userId)
         setValidOrder(true);
       } catch (e) {
         console.error("Validierungsfehler:", e);
@@ -371,42 +382,6 @@ function App() {
       <p>
         <strong>Zeit verbleibend:</strong> {timerActive ? `${timer}s` : <span style={{ color: "#c00" }}>Inaktiv</span>}
       </p>
-
-      {/* Chain-Auswahl */}
-      <label>
-        Chain auswählen:&nbsp;
-        <select
-          value={selectedChain}
-          onChange={(e) => {
-            setSelectedChain(e.target.value);
-            setSelectedCoin(Object.keys(chains[e.target.value].coins)[0]);
-          }}
-        >
-          {Object.keys(chains).map((key) => (
-            <option key={key} value={key}>
-              {chains[key].name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <br />
-      <br />
-
-      {/* Coin-Auswahl */}
-      <label>
-        Coin auswählen:&nbsp;
-        <select value={selectedCoin} onChange={(e) => setSelectedCoin(e.target.value)}>
-          {Object.keys(chains[selectedChain].coins).map((coin) => (
-            <option key={coin} value={coin}>
-              {coin}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <br />
-      <br />
 
       {/* Live-Umrechnung anzeigen */}
       <p>
