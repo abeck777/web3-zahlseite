@@ -159,7 +159,7 @@ function App() {
         }
         const data = await res.json();
 
-        if (!data.chain || !data,coin) {
+        if (!data.chain || !data.coin) {
           window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
           return;
         }
