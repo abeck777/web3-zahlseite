@@ -1,7 +1,17 @@
+// /pages/api/rechnung.js
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
+function generatePdfBase64(docDefinition) {
+  return new Promise((resolve, reject) => {
+    const pdfDocGenerator = pdfMake.createPdf(docDefinition);
+    pdfDocGenerator.getBase64((data) => {
+      resolve(data);
+    });
+  });
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -23,7 +33,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "❌ warenkorbWert muss numerisch sein" });
     }
 
-    // PDF-Dokument-Definition
     const docDefinition = {
       content: [
         { text: "🧾 Rechnung – GoldSilverStuff", style: "header" },
@@ -46,34 +55,31 @@ export default async function handler(req, res) {
       }
     };
 
-    const pdfDocGenerator = pdfMake.createPdf(docDefinition);
+    // ✅ PDF generieren
+    const base64 = await generatePdfBase64(docDefinition);
 
-    // PDF als Buffer erzeugen
-    pdfDocGenerator.getBase64(async (base64) => {
+    // ✅ POST an WIX (Rechnung speichern)
+    await fetch("https://www.goldsilverstuff.com/_functions/rechnungCreate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId,
+        name,
+        email,
+        warenkorbWert: totalEUR,
+        coin,
+        chain,
+        txHash,
+        walletAdresse,
+        zeitpunkt: new Date().toISOString(),
+        pdfBase64: base64,
+        userId
+      })
+    });
 
-      // ✅ Optional: POST an dein WIX rechnungCreate Endpoint
-      await fetch("https://www.goldsilverstuff.com/_functions/rechnungCreate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId,
-          name,
-          email,
-          warenkorbWert: totalEUR,
-          coin,
-          chain,
-          txHash,
-          walletAdresse,
-          zeitpunkt: new Date().toISOString(),
-          pdfBase64: base64,
-          userId
-        })
-      });
-
-      return res.status(200).json({
-        base64,
-        filename: `Rechnung_${orderId}.pdf`
-      });
+    return res.status(200).json({
+      base64,
+      filename: `Rechnung_${orderId}.pdf`
     });
   } catch (err) {
     console.error("❌ Fehler bei PDF-Erstellung:", err);
