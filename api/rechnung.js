@@ -14,6 +14,10 @@ function generatePdfBase64(docDefinition) {
 }
 
 export default async function handler(req, res) {
+  if (req.body.secret !== process.env.PDF_SECRET) {
+    return res.status(401).json({ error: "❌ Ungültiger Secret-Key" });
+  }  
+  
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
