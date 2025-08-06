@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     const pdfDocGenerator = pdfMake.createPdf(docDefinition);
 
     // PDF als Buffer erzeugen
-    pdfDocGenerator.getBuffer(async (buffer) => {
+    pdfDocGenerator.getBase64(async (base64) => {
       const base64 = buffer.toString("base64");
 
       // ✅ Optional: POST an dein WIX rechnungCreate Endpoint
