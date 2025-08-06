@@ -50,7 +50,6 @@ export default async function handler(req, res) {
 
     // PDF als Buffer erzeugen
     pdfDocGenerator.getBase64(async (base64) => {
-      const base64 = buffer.toString("base64");
 
       // ✅ Optional: POST an dein WIX rechnungCreate Endpoint
       await fetch("https://www.goldsilverstuff.com/_functions/rechnungCreate", {
