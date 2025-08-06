@@ -11,31 +11,31 @@ const chains = {
     coins: {
       ETH: { address: null, coingeckoId: "ethereum" },
       USDC: {
-        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606EB48",
+        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
         coingeckoId: "usd-coin",
       },
       USDT: {
-        address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
         coingeckoId: "tether",
       },
       DAI: {
-        address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
         coingeckoId: "dai",
       },
       SHIB: {
-        address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
         coingeckoId: "shiba-inu",
       },
       LINK: {
-        address: "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
         coingeckoId: "chainlink",
       },
       AAVE: {
-        address: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
         coingeckoId: "aave",
       },
       GRT: {
-        address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7",
+        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
         coingeckoId: "the-graph",
       },
     },
@@ -133,7 +133,7 @@ function App() {
 
     if (!orderIdParam || !tokenParam) {
       // Fehlende Parameter → sofort auf Fehlerseite
-      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagene";
+      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
       return;
     }
 
@@ -423,7 +423,7 @@ function App() {
 
       <p style={{ fontSize: "0.8em", color: "#555" }}>
         ⚠️ Kryptowährungen unterliegen starken Kursschwankungen und Zahlungen sind unwiderruflich. Bitte prüfe Chain &
-        Coin sorgfältig.
+        Coin sorgfältig. Wir haften nicht für Fehlangaben oder falscher Wahl der Chain.
       </p>
     </div>
   );
