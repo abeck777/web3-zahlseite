@@ -1,8 +1,12 @@
-// /pages/api/rechnung.js
-import puppeteer from "puppeteer";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
 
   try {
     const {
@@ -19,62 +23,61 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "❌ warenkorbWert muss numerisch sein" });
     }
 
-    const html = `
-      <html>
-        <head><meta charset="UTF-8"><title>Rechnung</title></head>
-        <body style="font-family:sans-serif; padding:20px;">
-          <h1>🧾 Rechnung zu Ihrer Bestellung</h1>
-          <p><strong>Bestellnummer:</strong> ${orderId}</p>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Chain:</strong> ${chain}</p>
-          <p><strong>Coin:</strong> ${coin}</p>
-          <p><strong>Warenkorbwert:</strong> ${totalEUR.toFixed(2)} EUR</p>
-          <p><strong>Wallet-Adresse:</strong> ${walletAdresse}</p>
-          <p><strong>Transaktions-Hash:</strong> ${txHash}</p>
-          <p style="margin-top:30px;">Vielen Dank für Ihre Zahlung bei GoldSilverStuff!</p>
-        </body>
-      </html>
-    `;
+    // PDF-Dokument-Definition
+    const docDefinition = {
+      content: [
+        { text: "🧾 Rechnung – GoldSilverStuff", style: "header" },
+        { text: `Bestellnummer: ${orderId}` },
+        { text: `Name: ${name}` },
+        { text: `E-Mail: ${email}` },
+        { text: `Warenkorbwert: ${totalEUR.toFixed(2)} EUR` },
+        { text: `Coin: ${coin}`, margin: [0, 5] },
+        { text: `Chain: ${chain}` },
+        { text: `Wallet: ${walletAdresse}` },
+        { text: `TxHash: ${txHash}` },
+        { text: "Vielen Dank für Ihre Zahlung!", margin: [0, 20] }
+      ],
+      styles: {
+        header: {
+          fontSize: 18,
+          bold: true,
+          margin: [0, 0, 0, 10]
+        }
+      }
+    };
 
-    const browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"] // wichtig für Vercel/Serverless
+    const pdfDocGenerator = pdfMake.createPdf(docDefinition);
+
+    // PDF als Buffer erzeugen
+    pdfDocGenerator.getBuffer(async (buffer) => {
+      const base64 = buffer.toString("base64");
+
+      // ✅ Optional: POST an dein WIX rechnungCreate Endpoint
+      await fetch("https://www.goldsilverstuff.com/_functions/rechnungCreate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          name,
+          email,
+          warenkorbWert: totalEUR,
+          coin,
+          chain,
+          txHash,
+          walletAdresse,
+          zeitpunkt: new Date().toISOString(),
+          pdfBase64: base64,
+          userId
+        })
+      });
+
+      return res.status(200).json({
+        base64,
+        filename: `Rechnung_${orderId}.pdf`
+      });
     });
-
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "load" });
-    const pdfBuffer = await page.pdf({ format: "A4" });
-    await browser.close();
-
-    const base64 = pdfBuffer.toString("base64");
-
-    // CMS-Eintrag in Wix (PDF + Metadaten)
-    await fetch("https://www.goldsilverstuff.com/_functions/rechnungCreate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orderId,
-        name,
-        email,
-        warenkorbWert: totalEUR,
-        coin,
-        chain,
-        txHash,
-        walletAdresse,
-        zeitpunkt: new Date().toISOString(),
-        pdfBase64: base64,
-        userId
-      })
-    });
-
-    return res.status(200).json({
-      base64,
-      filename: `Rechnung_${orderId}.pdf`
-    });
-
   } catch (err) {
     console.error("❌ Fehler bei PDF-Erstellung:", err);
-    return res.status(500).json({ error: "PDF-Konvertierung fehlgeschlagen" });
+    return res.status(500).json({ error: err.message || "PDF-Fehler" });
   }
 }
