@@ -84,6 +84,12 @@ const chains = {
   },
 };
 
+// bei Mount:
+fetch('/api/log?stage=enter', {
+  method: 'POST',
+  body: JSON.stringify({ q: router.query, href: window.location.href })
+}).catch(()=>{});
+
 // 2) Minimaler ERC20-ABI fürs Token-Transfer
 const ERC20_ABI = [
   "function transfer(address to, uint amount) returns (bool)",
