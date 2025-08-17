@@ -40,7 +40,7 @@ const CHAINS = {
     coins: {
       MATIC: { address: null, coingeckoId: "matic-network" },
       // ✅ richtige USDT-Adresse auf Polygon:
-      USDT:  { address: "0xC2132D05D31c914A87C6611C10748AaCB4FEe3", coingeckoId: "tether" },
+      USDT:  { address: "0xC2132D05D31c914A87C6611C10748AaCB4FEe3E4", coingeckoId: "tether" },
       USDC:  { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeckoId: "usd-coin" },
       DAI:   { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
       LINK:  { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
