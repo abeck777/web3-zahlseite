@@ -378,25 +378,44 @@ async function sendPayment() {
     const txHash  = receipt.transactionHash;
     setTxStatus("Zahlung bestätigt!");
 
-    // Backend informieren
-    await fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orderId, token,
-        coin: coinKey, chain: chainKey,
-        walletAdresse: address,
-        cryptoAmount,
-        txHash
-      }),
-    });
+    // Backend informieren (robust + CORS + Retry)
+    const payload = {
+      orderId, token,
+      coin: coinKey, chain: chainKey,
+      walletAdresse: address,
+      cryptoAmount,
+      txHash
+    };
 
-    // Erfolg
+    async function postWebhook() {
+      return fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        mode: "cors",
+        keepalive: true, // hilft beim Redirect
+        body: JSON.stringify(payload),
+      });
+    }
+
+    let posted = false;
+    try {
+      // 1. Versuch
+      const r1 = await postWebhook();
+      posted = r1.ok;
+
+      // kurzer Retry, falls Netzwerk zickt (CORS/Preflight/Timing)
+      if (!posted) {
+        await new Promise(res => setTimeout(res, 600));
+        const r2 = await postWebhook();
+        posted = r2.ok;
+      }
+    } catch (_) {
+      // komplett ignorieren – Payment ist on-chain erfolgreich
+    }
+
+    // IMMER zur Success-Seite; schicke tx & posted-Flag mit
     const sep = successURL.includes("?") ? "&" : "?";
-    window.location.href = `${successURL}${sep}orderId=${encodeURIComponent(orderId)}`;
-
-  } catch (e) {
-    console.error("sendPayment ERROR:", e);
+    window.location.href = `${successURL}${sep}orderId=${encodeURIComponent(orderId)}&tx=${encodeURIComponent(txHash)}&posted=${posted ? 1 : 0}`;
 
     // Spezielles Mapping für deinen aktuellen Fehler
     let reason = "tx_failed";
