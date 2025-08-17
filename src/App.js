@@ -307,38 +307,65 @@ async function sendPayment() {
   if (!signer) { setError("Bitte Wallet verbinden"); return; }
 
   const chainConf = CHAINS[chainKey];
-  if (!chainConf) { setError("Unbekannte Chain"); return; }
+  if (!chainConf) { setError(`Unbekannte Chain (${chainKey})`); return; }
 
   if (Number(chainId) !== Number(chainConf.chainId)) {
     setError(`Bitte Wallet auf ${chainConf.name} umstellen`);
     return;
   }
 
-  if (!cryptoAmount || isNaN(cryptoAmount) || Number(cryptoAmount) <= 0) {
+  if (!cryptoAmount || isNaN(Number(cryptoAmount)) || Number(cryptoAmount) <= 0) {
     setError("Ungültiger Betrag"); return;
   }
 
+  // --- VALIDIERUNGEN ---
+  const coinInfo = chainConf.coins?.[coinKey];
+  if (!coinInfo) { setError(`Coin ${coinKey} auf ${chainKey} nicht konfiguriert`); return; }
+
+  let recipient;
   try {
+    recipient = ethers.getAddress(chainConf.recipient); // wirft bei ungültig
+  } catch {
+    console.error("[PAY] Invalid recipient:", chainConf.recipient);
+    setError("Interne Empfängeradresse ungültig. Bitte Support kontaktieren.");
+    return;
+  }
+
+  let tokenAddr = null;
+  if (coinInfo.address === null) {
+    // native Coin (ETH/BNB/MATIC)
+  } else {
+    if (!ethers.isAddress(coinInfo.address)) {
+      console.error("[PAY] Invalid token address:", coinInfo.address);
+      setError(`Token-Adresse für ${coinKey} ungültig`);
+      return;
+    }
+    tokenAddr = ethers.getAddress(coinInfo.address); // normalisiert (Checksum)
+  }
+
+  console.log("[PAY] tx debug", {
+    chainKey, coinKey, chainId, expectedChainId: chainConf.chainId,
+    recipient, tokenAddr, cryptoAmount
+  });
+
+  try {
+    // kleine Signatur zur Absicherung
     const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${coinKey} (Order ${orderId})`;
     await signer.signMessage(message);
-
-    const recipient = chainConf.recipient;
-    const coinInfo  = chainConf.coins[coinKey];
-    if (!coinInfo) throw new Error(`Coin ${coinKey} auf ${chainKey} nicht konfiguriert`);
 
     setTxStatus("Transaktion läuft…");
     let txResponse;
 
-    if (coinInfo.address === null) {
-      // Native (ETH/BNB/MATIC)
+    if (tokenAddr === null) {
+      // Native Transfer
       txResponse = await signer.sendTransaction({
         to: recipient,
         value: ethers.parseEther(cryptoAmount),
       });
     } else {
-      // ERC-20
-      const contract = new ethers.Contract(coinInfo.address, ERC20_ABI, signer);
-      const decimals = await contract.decimals();
+      // ERC-20 Transfer
+      const contract = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
+      const decimals = await contract.decimals();          // sollte auf USDC (Polygon) 6 sein
       const value    = ethers.parseUnits(cryptoAmount, decimals);
       txResponse     = await contract.transfer(recipient, value);
     }
@@ -361,22 +388,26 @@ async function sendPayment() {
     });
 
     // Erfolg
-    window.location.href = successURL.includes("?")
-      ? `${successURL}&orderId=${encodeURIComponent(orderId)}`
-      : `${successURL}?orderId=${encodeURIComponent(orderId)}`;
+    const sep = successURL.includes("?") ? "&" : "?";
+    window.location.href = `${successURL}${sep}orderId=${encodeURIComponent(orderId)}`;
 
   } catch (e) {
     console.error("sendPayment ERROR:", e);
-    setError(e?.message || "Zahlung fehlgeschlagen");
 
-    const reason = (e && (e.code === 4001 || e.code === "ACTION_REJECTED"))
-      ? "user_rejected"
-      : "tx_failed";
+    // Spezielles Mapping für deinen aktuellen Fehler
+    let reason = "tx_failed";
+    if (e && (e.code === 4001 || e.code === "ACTION_REJECTED")) reason = "user_rejected";
+    if (e && e.code === "BAD_DATA" && e.info && e.info.method === "resolver") {
+      reason = "bad_address"; // ENS-Resolver wurde fälschlich versucht -> Adresse war nicht valide
+    }
+
+    setError(e?.message || "Zahlung fehlgeschlagen");
 
     const sep = failURL.includes("?") ? "&" : "?";
     window.location.href = `${failURL}${sep}orderId=${encodeURIComponent(orderId)}&reason=${encodeURIComponent(reason)}`;
   }
 }
+
 
   /* ─────────────────────────────────────────────
      11) UI
