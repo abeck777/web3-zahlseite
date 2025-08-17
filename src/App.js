@@ -4,7 +4,7 @@ import Web3Modal from "web3modal";
 import axios from "axios";
 
 // Händler-Wallet (gleiche Adresse auf allen Chains ok)
-const RECIPIENT = "x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1";
+const RECIPIENT = "0x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1";
 
 /* 1) CHAINS + Mapping für eingehende Keys */
 const CHAINS = {
