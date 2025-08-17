@@ -4,6 +4,18 @@ import { ethers } from "ethers";
 import Web3Modal from "web3modal";
 import axios from "axios";
 
+function safeUrl(raw, fallbackPath) {
+  try {
+    if (!raw) throw new Error("no url");
+    const u = new URL(raw);
+    const allowed = new Set(["www.goldsilverstuff.com"]);
+    if (!allowed.has(u.host)) throw new Error("bad host");
+    return u.toString();
+  } catch {
+    return `https://www.goldsilverstuff.com/${fallbackPath}`;
+  }
+}
+
 // === Händler-Wallet (gleiche Adresse auf allen Chains) ===
 const RECIPIENT = "0x3cfde8c9a3f1804aa9828be38a966762d98dced1";
 
