@@ -45,7 +45,7 @@ const CHAINS = {
       DAI:   { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
       LINK:  { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
       AAVE:  { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
-      // Optional: ETH alias via WETH auf Polygon (falls dein Checkout „ETH“ schickt)
+      // Optional: ETH alias via WETH auf Polygon
       ETH:   { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", coingeckoId: "weth" },
       WETH:  { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", coingeckoId: "weth" },
     },
@@ -127,7 +127,7 @@ function App() {
       try {
         const res = await fetch(
           `https://www.goldsilverstuff.com/_functions/web3zahlung?orderId=${encodeURIComponent(orderIdParam)}&token=${encodeURIComponent(tokenParam)}`,
-          { method: "GET", mode: "cors" } 
+          { method: "GET", mode: "cors" }
         );
         if (!res.ok) {
           const url = `${failUrl}${failUrl.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderIdParam)}&reason=verify_failed_${res.status}`;
@@ -164,7 +164,6 @@ function App() {
 
   /* ─────────────────────────────────────────────
      7) CoinGecko-Preis abrufen (nur bei validOrder)
-     Guarded, damit kein "undefined.coins" mehr auftritt
      ───────────────────────────────────────────── */
   useEffect(() => {
     if (!validOrder) return;
@@ -253,11 +252,9 @@ function App() {
 
       let provInstance;
       if (ext) {
-        // Direkter Connect (MetaMask bevorzugt)
         await ext.request({ method: "eth_requestAccounts" });
         provInstance = new ethers.BrowserProvider(ext);
       } else {
-        // Fallback: Web3Modal (z. B. WalletConnect/Mobile)
         const instance = await web3Modal.connect();
         provInstance = new ethers.BrowserProvider(instance);
       }
@@ -271,7 +268,7 @@ function App() {
       setAddress(addr);
       setChainId(Number(net.chainId));
 
-      // Events (nur wenn EIP-1193 Provider vorhanden)
+      // Events
       const base = ext || (typeof window !== 'undefined' ? window.ethereum : null);
       if (base && base.on) {
         base.on("accountsChanged", (accounts) => setAddress(accounts?.[0] || ""));
@@ -328,8 +325,8 @@ function App() {
     try {
       const raw = String(chainConf.recipient || "")
         .trim()
-        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, ""); // Zero-width chars entfernen
-      recipient = ethers.getAddress(raw.toLowerCase()); // normalisieren + Checksummenadresse
+        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+      recipient = ethers.getAddress(raw.toLowerCase());
     } catch (e) {
       console.error("[PAY] Invalid recipient (normalized fail):", chainConf.recipient, e);
       setError("Interne Empfängeradresse ungültig. Bitte Support kontaktieren.");
@@ -394,25 +391,22 @@ function App() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           mode: "cors",
-          keepalive: true, // hilft beim Redirect
+          keepalive: true,
           body: JSON.stringify(payload),
         });
       }
 
       let posted = false;
       try {
-        // 1. Versuch
         const r1 = await postWebhook();
         posted = r1.ok;
-
-        // kurzer Retry, falls Netzwerk zickt (CORS/Preflight/Timing)
         if (!posted) {
           await new Promise(res => setTimeout(res, 600));
           const r2 = await postWebhook();
           posted = r2.ok;
         }
       } catch (_) {
-        // ignorieren – On-Chain ist bezahlt
+        // ignorieren – On-Chain bezahlt
       }
 
       // Immer zur Success-Seite; tx & posted-Flag mitgeben
