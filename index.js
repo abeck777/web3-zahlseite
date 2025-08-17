@@ -19,18 +19,21 @@ export default function IndexPage() {
     };
     console.log('[ONCHAIN] landing params', params);
 
-    if (!params.orderId || !params.token || !params.fail) {
-      const url = params.fail || `https://www.goldsilverstuff.com/zahlung-fehlgeschlagen?orderId=${encodeURIComponent(params.orderId)}&reason=missing_params`;
+    const hardFail = (reason) => {
+      const base = params.fail || 'https://www.goldsilverstuff.com/zahlung-fehlgeschlagen';
+      const url = `${base}${base.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(params.orderId || '')}&reason=${encodeURIComponent(reason)}`;
       window.location.replace(url);
+    };
+
+    if (!params.orderId || !params.token || !params.fail) {
+      hardFail('missing_params');
       return;
     }
 
-    // Verify über eigenen Proxy (gleiches Origin -> kein CORS im Browser)
     fetch(`/api/web3zahlung?orderId=${encodeURIComponent(params.orderId)}&token=${encodeURIComponent(params.token)}`)
       .then(async r => {
         if (!r.ok) {
-          const url = `${params.fail}${params.fail.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(params.orderId)}&reason=verify_failed_${r.status}`;
-          window.location.replace(url);
+          hardFail(`verify_failed_${r.status}`);
           return null;
         }
         return r.json();
@@ -42,15 +45,13 @@ export default function IndexPage() {
       })
       .catch(e => {
         console.error('[ONCHAIN] verify ERROR', e);
-        const url = `${params.fail}${params.fail.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(params.orderId)}&reason=verify_error`;
-        window.location.replace(url);
+        hardFail('verify_error');
       });
   }, []);
 
   if (st.loading)   return <div style={{padding:20}}>Lade Zahlung …</div>;
   if (!st.verified) return <div style={{padding:20}}>Weiterleitung …</div>;
 
-  // HIER später dein echter Wallet-Flow (MetaMask etc.)
   return (
     <div style={{padding:20, maxWidth:640}}>
       <h1>On-Chain Zahlung</h1>
