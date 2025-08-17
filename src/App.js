@@ -3,13 +3,15 @@ import { ethers } from "ethers";
 import Web3Modal from "web3modal";
 import axios from "axios";
 
-/* ===========================================
-   1) CHAINS + Mapping für eingehende Keys
-   =========================================== */
-const chains = {
+// Händler-Wallet (gleiche Adresse auf allen Chains ok)
+const RECIPIENT = "x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1";
+
+/* 1) CHAINS + Mapping für eingehende Keys */
+const CHAINS = {
   eth: {
     name: "Ethereum",
     chainId: 1,
+    recipient: RECIPIENT,
     coins: {
       ETH:  { address: null, coingeckoId: "ethereum" },
       USDC: { address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", coingeckoId: "usd-coin" },
@@ -17,13 +19,14 @@ const chains = {
       DAI:  { address: "0x6b175474e89094c44da98b954eedeac495271d0f", coingeckoId: "dai" },
       LINK: { address: "0x514910771af9ca656af840dff83e8264ecf986ca", coingeckoId: "chainlink" },
       AAVE: { address: "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9", coingeckoId: "aave" },
-      SHIB: { address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", coingeckoId: "shiba-inu" },
+      SHIB: { address: "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce", coingeckoId: "shiba-inu" },
       GRT:  { address: "0xc944e90c64b2c07662a292be6244bdf05cda44a7", coingeckoId: "the-graph" },
     },
   },
   bnb: {
     name: "BNB Chain",
     chainId: 56,
+    recipient: RECIPIENT,
     coins: {
       BNB:  { address: null, coingeckoId: "binancecoin" },
       USDT: { address: "0x55d398326f99059fF775485246999027B3197955", coingeckoId: "tether" },
@@ -33,13 +36,18 @@ const chains = {
   matic: {
     name: "Polygon",
     chainId: 137,
+    recipient: RECIPIENT,
     coins: {
-      MATIC:{ address: null, coingeckoId: "matic-network" },
-      USDT: { address: "0x3813e82e6f7098b9583FC0F33a962D02018B6803", coingeckoId: "tether" },
-      USDC: { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeckoId: "usd-coin" },
-      DAI:  { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
-      LINK: { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
-      AAVE: { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
+      MATIC: { address: null, coingeckoId: "matic-network" },
+      // ✅ richtige USDT-Adresse auf Polygon:
+      USDT:  { address: "0xC2132D05D31c914A87C6611C10748AaCB4FEe3", coingeckoId: "tether" },
+      USDC:  { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeckoId: "usd-coin" },
+      DAI:   { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
+      LINK:  { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
+      AAVE:  { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
+      // Optional: ETH alias via WETH auf Polygon (falls dein Checkout „ETH“ schickt)
+      ETH:   { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", coingeckoId: "weth" },
+      WETH:  { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", coingeckoId: "weth" },
     },
   },
 };
@@ -165,7 +173,7 @@ function App() {
       try {
         if (!chainKey || !coinKey) return;
 
-        const chainObj = chains[chainKey];
+        const chainObj = CHAINS[chainKey];
         if (!chainObj) {
           console.warn("[PRICE] Unbekannte Chain:", chainKey);
           setError(`Unbekannte Chain: ${chainKey}`);
@@ -301,7 +309,7 @@ async function sendPayment() {
   const chainConf = CHAINS[chainKey];
   if (!chainConf) { setError("Unbekannte Chain"); return; }
 
-  if (chainId !== BigInt(chainConf.chainId)) {
+  if (Number(chainId) !== Number(chainConf.chainId)) {
     setError(`Bitte Wallet auf ${chainConf.name} umstellen`);
     return;
   }
@@ -382,7 +390,7 @@ async function sendPayment() {
     );
   }
 
-  const chainObj = chains[chainKey];
+  const chainObj = CHAINS[chainKey];
 
   return (
     <div style={{ maxWidth: 520, margin: "auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
