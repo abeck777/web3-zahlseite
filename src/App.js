@@ -419,7 +419,7 @@ function App() {
         `&coin=${encodeURIComponent(coinKey)}` +
         `&chain=${encodeURIComponent(chainKey)}` +
         `&wallet=${encodeURIComponent(address)}` +
-        `&amount=${encodeURIComponent(String(cryptoAmount))}`;
+        `&amount=${encodeURIComponent(String(cryptoAmount))}` +
         `&token=${encodeURIComponent(token)}`;
       window.location.href = `${successURL}${sep1}${successParams}`;
     } catch (e) {
