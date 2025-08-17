@@ -164,6 +164,7 @@ function App() {
 
   /* ─────────────────────────────────────────────
      7) CoinGecko-Preis abrufen (nur bei validOrder)
+     Guarded, damit kein "undefined.coins" mehr auftritt
      ───────────────────────────────────────────── */
   useEffect(() => {
     if (!validOrder) return;
@@ -297,7 +298,7 @@ function App() {
      10) Zahlung ausführen
      ───────────────────────────────────────────── */
   async function sendPayment() {
-    setError(""); 
+    setError("");
     setTxStatus("");
 
     const url = new URL(window.location.href);
@@ -315,7 +316,7 @@ function App() {
     }
 
     if (!cryptoAmount || isNaN(Number(cryptoAmount)) || Number(cryptoAmount) <= 0) {
-      setError("Ungültiger Betrag"); 
+      setError("Ungültiger Betrag");
       return;
     }
 
@@ -327,7 +328,7 @@ function App() {
     try {
       const raw = String(chainConf.recipient || "")
         .trim()
-        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");  // Zero-width chars entfernen
+        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, ""); // Zero-width chars entfernen
       recipient = ethers.getAddress(raw.toLowerCase()); // normalisieren + Checksummenadresse
     } catch (e) {
       console.error("[PAY] Invalid recipient (normalized fail):", chainConf.recipient, e);
@@ -460,7 +461,7 @@ function App() {
 
       <p>
         <strong>Auswahl:</strong>{" "}
-        {coinKey || "—"} {chainObj ? `@ ${chainObj.name}` : chainKey || ""}
+        {coinKey || "—"} {chainObj ? `@ ${chainObj.name}` : (chainKey || "")}
       </p>
 
       <p><strong>Zeit verbleibend:</strong> {timerActive ? `${timer}s` : <span style={{ color: "#c00" }}>Inaktiv</span>}</p>
