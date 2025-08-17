@@ -412,7 +412,15 @@ function App() {
       }
 
       const sep1 = successURL.includes("?") ? "&" : "?";
-      window.location.href = `${successURL}${sep1}orderId=${encodeURIComponent(orderId)}&tx=${encodeURIComponent(txHash)}&posted=${posted ? 1 : 0}`;
+      const successParams =
+        `orderId=${encodeURIComponent(orderId)}` +
+        `&tx=${encodeURIComponent(txHash)}` +
+        `&posted=${posted ? 1 : 0}` +
+        `&coin=${encodeURIComponent(coinKey)}` +
+        `&chain=${encodeURIComponent(chainKey)}` +
+        `&wallet=${encodeURIComponent(address)}` +
+        `&amount=${encodeURIComponent(String(cryptoAmount))}`;
+      window.location.href = `${successURL}${sep1}${successParams}`;
     } catch (e) {
       console.error("sendPayment ERROR:", e);
       let reason = "tx_failed";
