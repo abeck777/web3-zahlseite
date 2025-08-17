@@ -164,7 +164,6 @@ function App() {
 
   /* ─────────────────────────────────────────────
      7) CoinGecko-Preis abrufen (nur bei validOrder)
-     Guarded, damit kein "undefined.coins" mehr auftritt
      ───────────────────────────────────────────── */
   useEffect(() => {
     if (!validOrder) return;
@@ -297,153 +296,145 @@ function App() {
   /* ─────────────────────────────────────────────
      10) Zahlung ausführen
      ───────────────────────────────────────────── */
-async function sendPayment() {
-  setError(""); 
-  setTxStatus("");
+  async function sendPayment() {
+    setError(""); 
+    setTxStatus("");
 
-  const url = new URL(window.location.href);
-  const successURL = url.searchParams.get("success") || "https://www.goldsilverstuff.com/zahlung-erfolgreich";
-  const failURL    = url.searchParams.get("fail")    || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+    const url = new URL(window.location.href);
+    const successURL = url.searchParams.get("success") || "https://www.goldsilverstuff.com/zahlung-erfolgreich";
+    const failURL    = url.searchParams.get("fail")    || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
 
-  if (!signer) { setError("Bitte Wallet verbinden"); return; }
+    if (!signer) { setError("Bitte Wallet verbinden"); return; }
 
-  const chainConf = CHAINS[chainKey];
-  if (!chainConf) { setError(`Unbekannte Chain (${chainKey})`); return; }
+    const chainConf = CHAINS[chainKey];
+    if (!chainConf) { setError(`Unbekannte Chain (${chainKey})`); return; }
 
-  if (Number(chainId) !== Number(chainConf.chainId)) {
-    setError(`Bitte Wallet auf ${chainConf.name} umstellen`);
-    return;
-  }
-
-  if (!cryptoAmount || isNaN(Number(cryptoAmount)) || Number(cryptoAmount) <= 0) {
-    setError("Ungültiger Betrag"); 
-    return;
-  }
-
-  // --- VALIDIERUNGEN ---
-  const coinInfo = chainConf.coins?.[coinKey];
-  if (!coinInfo) { setError(`Coin ${coinKey} auf ${chainKey} nicht konfiguriert`); return; }
-
-  let recipient;
-  try {
-    const raw = String(chainConf.recipient || "")
-      .trim()
-      .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");  // Zero-width chars entfernen
-    recipient = ethers.getAddress(raw.toLowerCase()); // normalisieren + Checksummenadresse
-  } catch (e) {
-    console.error("[PAY] Invalid recipient (normalized fail):", chainConf.recipient, e);
-    setError("Interne Empfängeradresse ungültig. Bitte Support kontaktieren.");
-    return;
-  }
-
-  let tokenAddr = null;
-  if (coinInfo.address !== null) {
-    const rawToken = String(coinInfo.address || "")
-      .trim()
-      .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
-    if (!ethers.isAddress(rawToken)) {
-      console.error("[PAY] Invalid token address:", rawToken);
-      setError(`Token-Adresse für ${coinKey} ungültig`);
+    if (Number(chainId) !== Number(chainConf.chainId)) {
+      setError(`Bitte Wallet auf ${chainConf.name} umstellen`);
       return;
     }
-    tokenAddr = ethers.getAddress(rawToken.toLowerCase());
-  }
 
-  console.log("[PAY] tx debug", {
-    chainKey, coinKey, chainId, expectedChainId: chainConf.chainId,
-    recipient, tokenAddr, cryptoAmount
-  });
-
-  try {
-    // kleine Signatur zur Absicherung
-    const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${coinKey} (Order ${orderId})`;
-    await signer.signMessage(message);
-
-    setTxStatus("Transaktion läuft…");
-    let txResponse;
-
-    if (tokenAddr === null) {
-      // Native Transfer
-      txResponse = await signer.sendTransaction({
-        to: recipient,
-        value: ethers.parseEther(cryptoAmount),
-      });
-    } else {
-      // ERC-20 Transfer
-      const contract = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
-      const decimals = await contract.decimals();
-      const value    = ethers.parseUnits(cryptoAmount, decimals);
-      txResponse     = await contract.transfer(recipient, value);
+    if (!cryptoAmount || isNaN(Number(cryptoAmount)) || Number(cryptoAmount) <= 0) {
+      setError("Ungültiger Betrag"); 
+      return;
     }
 
-    const receipt = await txResponse.wait();
-    const txHash  = receipt.transactionHash;
-    setTxStatus("Zahlung bestätigt!");
+    // --- VALIDIERUNGEN ---
+    const coinInfo = chainConf.coins?.[coinKey];
+    if (!coinInfo) { setError(`Coin ${coinKey} auf ${chainKey} nicht konfiguriert`); return; }
 
-    // Backend informieren (robust + CORS + Retry)
-    const payload = {
-      orderId, token,
-      coin: coinKey, chain: chainKey,
-      walletAdresse: address,
-      cryptoAmount,
-      txHash
-    };
-
-    async function postWebhook() {
-      return fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        mode: "cors",
-        keepalive: true, // hilft beim Redirect
-        body: JSON.stringify(payload),
-      });
-    }
-
-    let posted = false;
+    let recipient;
     try {
-      // 1. Versuch
-      const r1 = await postWebhook();
-      posted = r1.ok;
-
-      // kurzer Retry, falls Netzwerk zickt (CORS/Preflight/Timing)
-      if (!posted) {
-        await new Promise(res => setTimeout(res, 600));
-        const r2 = await postWebhook();
-        posted = r2.ok;
-      }
-    } catch (_) {
-      // ignorieren – On-Chain ist bezahlt
+      const raw = String(chainConf.recipient || "")
+        .trim()
+        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");  // Zero-width chars entfernen
+      recipient = ethers.getAddress(raw.toLowerCase()); // normalisieren + Checksummenadresse
+    } catch (e) {
+      console.error("[PAY] Invalid recipient (normalized fail):", chainConf.recipient, e);
+      setError("Interne Empfängeradresse ungültig. Bitte Support kontaktieren.");
+      return;
     }
 
-    // Immer zur Success-Seite; tx & posted-Flag mitgeben
-    const sep1 = successURL.includes("?") ? "&" : "?";
-    window.location.href = `${successURL}${sep1}orderId=${encodeURIComponent(orderId)}&tx=${encodeURIComponent(txHash)}&posted=${posted ? 1 : 0}`;
+    let tokenAddr = null;
+    if (coinInfo.address !== null) {
+      const rawToken = String(coinInfo.address || "")
+        .trim()
+        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+      if (!ethers.isAddress(rawToken)) {
+        console.error("[PAY] Invalid token address:", rawToken);
+        setError(`Token-Adresse für ${coinKey} ungültig`);
+        return;
+      }
+      tokenAddr = ethers.getAddress(rawToken.toLowerCase());
+    }
 
-  } catch (e) {
-    console.error("sendPayment ERROR:", e);
+    console.log("[PAY] tx debug", {
+      chainKey, coinKey, chainId, expectedChainId: chainConf.chainId,
+      recipient, tokenAddr, cryptoAmount
+    });
 
-    let reason = "tx_failed";
-    if (e && (e.code === 4001 || e.code === "ACTION_REJECTED")) reason = "user_rejected";
-    if (e && e.code === "BAD_DATA" && e.info && e.info.method === "resolver") reason = "bad_address";
+    try {
+      // kleine Signatur zur Absicherung
+      const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${coinKey} (Order ${orderId})`;
+      await signer.signMessage(message);
 
-    setError(e?.message || "Zahlung fehlgeschlagen");
+      setTxStatus("Transaktion läuft…");
+      let txResponse;
 
-    const sep2 = failURL.includes("?") ? "&" : "?";
-    window.location.href = `${failURL}${sep2}orderId=${encodeURIComponent(orderId)}&reason=${encodeURIComponent(reason)}`;
+      if (tokenAddr === null) {
+        // Native Transfer
+        txResponse = await signer.sendTransaction({
+          to: recipient,
+          value: ethers.parseEther(cryptoAmount),
+        });
+      } else {
+        // ERC-20 Transfer
+        const contract = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
+        const decimals = await contract.decimals();
+        const value    = ethers.parseUnits(cryptoAmount, decimals);
+        txResponse     = await contract.transfer(recipient, value);
+      }
+
+      const receipt = await txResponse.wait();
+      const txHash  = receipt.transactionHash;
+      setTxStatus("Zahlung bestätigt!");
+
+      // Backend informieren (robust + CORS + Retry)
+      const payload = {
+        orderId, token,
+        coin: coinKey, chain: chainKey,
+        walletAdresse: address,
+        cryptoAmount,
+        txHash
+      };
+
+      async function postWebhook() {
+        return fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          mode: "cors",
+          keepalive: true, // hilft beim Redirect
+          body: JSON.stringify(payload),
+        });
+      }
+
+      let posted = false;
+      try {
+        // 1. Versuch
+        const r1 = await postWebhook();
+        posted = r1.ok;
+
+        // kurzer Retry, falls Netzwerk zickt (CORS/Preflight/Timing)
+        if (!posted) {
+          await new Promise(res => setTimeout(res, 600));
+          const r2 = await postWebhook();
+          posted = r2.ok;
+        }
+      } catch (_) {
+        // ignorieren – On-Chain ist bezahlt
+      }
+
+      // Immer zur Success-Seite; tx & posted-Flag mitgeben
+      const sep1 = successURL.includes("?") ? "&" : "?";
+      window.location.href = `${successURL}${sep1}orderId=${encodeURIComponent(orderId)}&tx=${encodeURIComponent(txHash)}&posted=${posted ? 1 : 0}`;
+
+    } catch (e) {
+      console.error("sendPayment ERROR:", e);
+
+      let reason = "tx_failed";
+      if (e && (e.code === 4001 || e.code === "ACTION_REJECTED")) reason = "user_rejected";
+      if (e && e.code === "BAD_DATA" && e.info && e.info.method === "resolver") reason = "bad_address";
+
+      setError(e?.message || "Zahlung fehlgeschlagen");
+
+      const sep2 = failURL.includes("?") ? "&" : "?";
+      window.location.href = `${failURL}${sep2}orderId=${encodeURIComponent(orderId)}&reason=${encodeURIComponent(reason)}`;
+    }
   }
-}
-
-
-  const chainConf = CHAINS[chainKey];
-  if (!chainConf) { setError(`Unbekannte Chain (${chainKey})`); return; }
-
-  if
-
 
   /* ─────────────────────────────────────────────
      11) UI
      ───────────────────────────────────────────── */
-
   if (validating) {
     return (
       <div style={{ textAlign: "center", marginTop: 50 }}>
