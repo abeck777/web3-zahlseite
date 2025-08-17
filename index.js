@@ -7,50 +7,50 @@ const RECIPIENT = '0x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1';
 
 // === Chains & Token-Registry ===
 // Keys MÜSSEN zu ?chain=ETH|BSC|POLYGON passen
+// 1) Chains & Token-Contracts (MAINNET)
 const CHAINS = {
   ETH: {
-    name: 'Ethereum',
-    chainIdDec: 1,
-    chainIdHex: '0x1',
-    native: 'ETH',
-    tokens: {
-      // Offizielle Mainnet-Contracts:
-      USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', coingeckoId: 'tether' },
-      USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', coingeckoId: 'usd-coin' },
-      DAI:  { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', coingeckoId: 'dai' },
-      LINK: { address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', coingeckoId: 'chainlink' },
-      AAVE: { address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', coingeckoId: 'aave' },
-      SHIB: { address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', coingeckoId: 'shiba-inu' },
-      GRT:  { address: '0xC944E90C64B2c07662A292be6244BDf05Cda44a7', coingeckoId: 'the-graph' },
+    name: "Ethereum",
+    chainId: 1,
+    recipient: "0x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1", // Händler-Wallet (ETH)
+    coins: {
+      ETH:  { address: null, coingeckoId: "ethereum" },
+      USDC: { address: "0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", coingeckoId: "usd-coin" },
+      USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", coingeckoId: "tether" },
+      DAI:  { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", coingeckoId: "dai" },
+      SHIB: { address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", coingeckoId: "shiba-inu" },
+      LINK: { address: "0x514910771AF9Ca656af840dff83E8264EcF986CA", coingeckoId: "chainlink" },
+      AAVE: { address: "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9", coingeckoId: "aave" },
+      GRT:  { address: "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", coingeckoId: "the-graph" },
     },
-    coingeckoIds: { ETH: 'ethereum' },
   },
+
   BSC: {
-    name: 'BNB Chain',
-    chainIdDec: 56,
-    chainIdHex: '0x38',
-    native: 'BNB',
-    tokens: {
-      USDT: { address: '0x55d398326f99059fF775485246999027B3197955', coingeckoId: 'tether' },
-      USDC: { address: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', coingeckoId: 'usd-coin' },
-      DAI:  { address: '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3', coingeckoId: 'dai' }, // bridged
+    name: "BNB Chain",
+    chainId: 56,
+    recipient: "0x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1", // Händler-Wallet (BSC)
+    coins: {
+      BNB:  { address: null, coingeckoId: "binancecoin" },
+      USDT: { address: "0x55d398326f99059fF775485246999027B3197955", coingeckoId: "tether" },
+      USDC: { address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", coingeckoId: "usd-coin" },
     },
-    coingeckoIds: { BNB: 'binancecoin' },
   },
+
   POLYGON: {
-    name: 'Polygon',
-    chainIdDec: 137,
-    chainIdHex: '0x89',
-    native: 'MATIC',
-    tokens: {
-      USDT: { address: '0xC2132D05D31c914a87C6611C10748AaCbC532EFD', coingeckoId: 'tether' },
-      USDC: { address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', coingeckoId: 'usd-coin' },
-      DAI:  { address: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063', coingeckoId: 'dai' },
-      LINK: { address: '0x53E0bca35eC356BD5ddDFebbD1FC0fD03Fabad39', coingeckoId: 'chainlink' },
-      AAVE: { address: '0xD6DF932A45C0f255f85145F286eA0b292B21C90B', coingeckoId: 'aave' },
-      MATIC: { address: null, coingeckoId: 'matic-network' } // native alias
+    name: "Polygon",
+    chainId: 137,
+    recipient: "0x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1", // Händler-Wallet (Polygon)
+    coins: {
+      MATIC: { address: null, coingeckoId: "matic-network" },
+      // ✅ KORREKTE USDT-Adresse auf Polygon:
+      USDT:  { address: "0xC2132D05D31c914A87C6611C10748AaCB4FEe3", coingeckoId: "tether" },
+      USDC:  { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeckoId: "usd-coin" },
+      DAI:   { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
+      LINK:  { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
+      AAVE:  { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
+      // Optional statt "ETH" auf Polygon lieber WETH (ERC-20):
+      WETH:  { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", coingeckoId: "weth" },
     },
-    coingeckoIds: { MATIC: 'matic-network' },
   },
 };
 

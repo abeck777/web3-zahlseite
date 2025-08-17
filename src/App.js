@@ -289,89 +289,86 @@ function App() {
   /* ─────────────────────────────────────────────
      10) Zahlung ausführen
      ───────────────────────────────────────────── */
-  async function sendPayment() {
-    setError("");
-    setTxStatus("");
+async function sendPayment() {
+  setError(""); setTxStatus("");
 
-    if (!signer) {
-      setError("Bitte Wallet verbinden");
-      return;
-    }
+  const url = new URL(window.location.href);
+  const successURL = url.searchParams.get("success") || "https://www.goldsilverstuff.com/zahlung-erfolgreich";
+  const failURL    = url.searchParams.get("fail")    || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
 
-    const chainCfg = chains[chainKey];
-    if (!chainCfg) {
-      setError(`Unbekannte Chain: ${chainKey}`);
-      return;
-    }
-    if (Number(chainId) !== Number(chainCfg.chainId)) {
-      setError(`Bitte Wallet auf ${chainCfg.name} umstellen`);
-      return;
-    }
+  if (!signer) { setError("Bitte Wallet verbinden"); return; }
 
-    if (!cryptoAmount || isNaN(cryptoAmount) || Number(cryptoAmount) <= 0) {
-      setError("Ungültiger Betrag");
-      return;
-    }
+  const chainConf = CHAINS[chainKey];
+  if (!chainConf) { setError("Unbekannte Chain"); return; }
 
-    try {
-      // 1) Nachricht signieren (optional – Proof of Intent)
-      const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${coinKey} (Order ${orderId})`;
-      await signer.signMessage(message);
-
-      // 2) Transaktion
-      const recipient = "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb";
-      const coinInfo = chains[chainKey].coins[coinKey];
-      let txResponse;
-
-      setTxStatus("Transaktion läuft...");
-      if (coinInfo.address === null) {
-        // Native Coin (ETH/BNB/MATIC)
-        txResponse = await signer.sendTransaction({
-          to: recipient,
-          value: ethers.parseEther(String(cryptoAmount)),
-        });
-      } else {
-        // ERC20
-        const contract = new ethers.Contract(coinInfo.address, ERC20_ABI, signer);
-        const decimals = await contract.decimals();
-        const value = ethers.parseUnits(String(cryptoAmount), decimals);
-        txResponse = await contract.transfer(recipient, value);
-      }
-
-      // 3) Warten auf Bestätigung
-      const receipt = await txResponse.wait();
-      const txHash = receipt.transactionHash || txResponse.hash;
-
-      setTxStatus("Zahlung bestätigt!");
-
-      // 4) POST an Wix Backend
-      await fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId,
-          token,
-          coin: coinKey,
-          chain: chainKey,
-          walletAdresse: address,
-          cryptoAmount,
-          txHash
-        }),
-      });
-
-      // 5) Success-Redirect
-      const params = new URLSearchParams(window.location.search);
-      const success = params.get("success") || "https://www.goldsilverstuff.com/zahlung-erfolgreich";
-      window.location.href = success;
-    } catch (e) {
-      console.error("sendPayment-Fehler:", e);
-      setError("Zahlung fehlgeschlagen");
-      const params = new URLSearchParams(window.location.search);
-      const fail = params.get("fail") || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
-      const url = `${fail}${fail.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderId || '')}&reason=tx_failed`;
-      window.location.href = url;
-    }
+  if (chainId !== BigInt(chainConf.chainId)) {
+    setError(`Bitte Wallet auf ${chainConf.name} umstellen`);
+    return;
   }
+
+  if (!cryptoAmount || isNaN(cryptoAmount) || Number(cryptoAmount) <= 0) {
+    setError("Ungültiger Betrag"); return;
+  }
+
+  try {
+    const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${coinKey} (Order ${orderId})`;
+    await signer.signMessage(message);
+
+    const recipient = chainConf.recipient;
+    const coinInfo  = chainConf.coins[coinKey];
+    if (!coinInfo) throw new Error(`Coin ${coinKey} auf ${chainKey} nicht konfiguriert`);
+
+    setTxStatus("Transaktion läuft…");
+    let txResponse;
+
+    if (coinInfo.address === null) {
+      // Native (ETH/BNB/MATIC)
+      txResponse = await signer.sendTransaction({
+        to: recipient,
+        value: ethers.parseEther(cryptoAmount),
+      });
+    } else {
+      // ERC-20
+      const contract = new ethers.Contract(coinInfo.address, ERC20_ABI, signer);
+      const decimals = await contract.decimals();
+      const value    = ethers.parseUnits(cryptoAmount, decimals);
+      txResponse     = await contract.transfer(recipient, value);
+    }
+
+    const receipt = await txResponse.wait();
+    const txHash  = receipt.transactionHash;
+    setTxStatus("Zahlung bestätigt!");
+
+    // Backend informieren
+    await fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId, token,
+        coin: coinKey, chain: chainKey,
+        walletAdresse: address,
+        cryptoAmount,
+        txHash
+      }),
+    });
+
+    // Erfolg
+    window.location.href = successURL.includes("?")
+      ? `${successURL}&orderId=${encodeURIComponent(orderId)}`
+      : `${successURL}?orderId=${encodeURIComponent(orderId)}`;
+
+  } catch (e) {
+    console.error("sendPayment ERROR:", e);
+    setError(e?.message || "Zahlung fehlgeschlagen");
+
+    const reason = (e && (e.code === 4001 || e.code === "ACTION_REJECTED"))
+      ? "user_rejected"
+      : "tx_failed";
+
+    const sep = failURL.includes("?") ? "&" : "?";
+    window.location.href = `${failURL}${sep}orderId=${encodeURIComponent(orderId)}&reason=${encodeURIComponent(reason)}`;
+  }
+}
 
   /* ─────────────────────────────────────────────
      11) UI
