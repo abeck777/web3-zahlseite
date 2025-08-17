@@ -1,117 +1,89 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { ethers } from "ethers";
 import Web3Modal from "web3modal";
 import axios from "axios";
 
-// 1) Definiere deine Chains & Tokens
+/* ===========================================
+   1) CHAINS + Mapping für eingehende Keys
+   =========================================== */
 const chains = {
   eth: {
     name: "Ethereum",
     chainId: 1,
     coins: {
-      ETH: { address: null, coingeckoId: "ethereum" },
-      USDC: {
-        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
-        coingeckoId: "usd-coin",
-      },
-      USDT: {
-        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
-        coingeckoId: "tether",
-      },
-      DAI: {
-        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
-        coingeckoId: "dai",
-      },
-      SHIB: {
-        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
-        coingeckoId: "shiba-inu",
-      },
-      LINK: {
-        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
-        coingeckoId: "chainlink",
-      },
-      AAVE: {
-        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
-        coingeckoId: "aave",
-      },
-      GRT: {
-        address: "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb",
-        coingeckoId: "the-graph",
-      },
+      ETH:  { address: null, coingeckoId: "ethereum" },
+      USDC: { address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", coingeckoId: "usd-coin" },
+      USDT: { address: "0xdac17f958d2ee523a2206206994597c13d831ec7", coingeckoId: "tether" },
+      DAI:  { address: "0x6b175474e89094c44da98b954eedeac495271d0f", coingeckoId: "dai" },
+      LINK: { address: "0x514910771af9ca656af840dff83e8264ecf986ca", coingeckoId: "chainlink" },
+      AAVE: { address: "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9", coingeckoId: "aave" },
+      SHIB: { address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", coingeckoId: "shiba-inu" },
+      GRT:  { address: "0xc944e90c64b2c07662a292be6244bdf05cda44a7", coingeckoId: "the-graph" },
     },
   },
   bnb: {
     name: "BNB Chain",
     chainId: 56,
     coins: {
-      BNB: { address: null, coingeckoId: "binancecoin" },
-      USDT: {
-        address: "0x55d398326f99059fF775485246999027B3197955",
-        coingeckoId: "tether",
-      },
-      USDC: {
-        address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
-        coingeckoId: "usd-coin",
-      },
+      BNB:  { address: null, coingeckoId: "binancecoin" },
+      USDT: { address: "0x55d398326f99059fF775485246999027B3197955", coingeckoId: "tether" },
+      USDC: { address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", coingeckoId: "usd-coin" },
     },
   },
   matic: {
     name: "Polygon",
     chainId: 137,
     coins: {
-      MATIC: { address: null, coingeckoId: "matic-network" },
-      USDT: {
-        address: "0x3813e82e6f7098b9583FC0F33a962D02018B6803",
-        coingeckoId: "tether",
-      },
-      USDC: {
-        address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
-        coingeckoId: "usd-coin",
-      },
-      DAI: {
-        address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
-        coingeckoId: "dai",
-      },
-      LINK: {
-        address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39",
-        coingeckoId: "chainlink",
-      },
-      AAVE: {
-        address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b",
-        coingeckoId: "aave",
-      },
+      MATIC:{ address: null, coingeckoId: "matic-network" },
+      USDT: { address: "0x3813e82e6f7098b9583FC0F33a962D02018B6803", coingeckoId: "tether" },
+      USDC: { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeckoId: "usd-coin" },
+      DAI:  { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
+      LINK: { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
+      AAVE: { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
     },
   },
 };
 
-// 2) Minimaler ERC20-ABI fürs Token-Transfer
+// Normalisierung eingehender Chain-Namen
+const CHAIN_ALIAS = {
+  ETH: "eth",
+  ETHEREUM: "eth",
+  BSC: "bnb",
+  BNB: "bnb",
+  BINANCE: "bnb",
+  POLYGON: "matic",
+  MATIC: "matic",
+};
+
+/* 2) Minimaler ERC20-ABI */
 const ERC20_ABI = [
   "function transfer(address to, uint amount) returns (bool)",
   "function decimals() view returns (uint8)",
 ];
 
 function App() {
-  // 3) URL-Parameter (orderId + token) auslesen
+  /* 3) URL-Parameter (orderId + token) */
   const [orderId, setOrderId] = useState("");
   const [token, setToken] = useState("");
-  const [chainKey, setChainKey] = useState("")
-  const [coinKey, setCoinKey] = useState("")
-  const [userId, setUserId] = useState("")
 
-  // 4) Bestelldaten vom Backend (erst nach GET-Validierung)
+  /* 4) Bestelldaten vom Backend */
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [cartValueEUR, setCartValueEUR] = useState(0);
 
-  // 5) Weitere State-Variablen
-  const [validating, setValidating] = useState(true); // Während GET-Request läuft
+  /* 5) Auswahl + State */
+  const [chainKey, setChainKey] = useState("");  // normalisiert (eth/bnb/matic)
+  const [coinKey, setCoinKey] = useState("");    // z.B. USDT
+  const [userId, setUserId] = useState("");
+
+  const [validating, setValidating] = useState(true);
   const [validOrder, setValidOrder] = useState(false);
 
-  const selectedChain = chainKey;
-  const selectedCoin = coinKey;
   const [priceEUR, setPriceEUR] = useState(null);
   const [cryptoAmount, setCryptoAmount] = useState("");
-  const [timer, setTimer] = useState(180); // 3 Minuten
+
+  // Timer 10 Minuten
+  const [timer, setTimer] = useState(600);
   const [timerActive, setTimerActive] = useState(false);
 
   const [provider, setProvider] = useState(null);
@@ -122,75 +94,102 @@ function App() {
   const [txStatus, setTxStatus] = useState("");
   const [error, setError] = useState("");
 
-  const web3Modal = new Web3Modal({ cacheProvider: true });
+  // Web3Modal: Cache aus, damit nicht Coinbase hängen bleibt
+  const web3Modal = useMemo(() => new Web3Modal({ cacheProvider: false }), []);
 
-  // ───────────────────────────────────────────────────────────────────
-  // 6) 1. useEffect: Nur orderId + token aus URL einlesen und validieren
+  /* ─────────────────────────────────────────────
+     6) URL-Params lesen + GET-Validierung
+     ───────────────────────────────────────────── */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const orderIdParam = params.get("orderId");
     const tokenParam = params.get("token");
+    const failUrl = params.get("fail") || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
 
     if (!orderIdParam || !tokenParam) {
-      // Fehlende Parameter → sofort auf Fehlerseite
-      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+      const url = `${failUrl}${failUrl.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderIdParam || '')}&reason=missing_params`;
+      window.location.href = url;
       return;
     }
 
     setOrderId(orderIdParam);
     setToken(tokenParam);
 
-    // Jetzt zum Backend gehen und validieren
     (async () => {
       try {
         const res = await fetch(
-          `https://www.goldsilverstuff.com/_functions/web3zahlung?orderId=${encodeURIComponent(
-            orderIdParam
-          )}&token=${encodeURIComponent(tokenParam)}`,
-          {
-            method: "GET",
-            headers: { "Content-Type": "application/json" },
-          }
+          `https://www.goldsilverstuff.com/_functions/web3zahlung?orderId=${encodeURIComponent(orderIdParam)}&token=${encodeURIComponent(tokenParam)}`,
+          { method: "GET", headers: { "Content-Type": "application/json" } }
         );
         if (!res.ok) {
-          // Nicht 200 OK → ungültige Bestellung oder Token
-          window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+          const url = `${failUrl}${failUrl.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderIdParam)}&reason=verify_failed_${res.status}`;
+          window.location.href = url;
           return;
         }
         const data = await res.json();
 
-        if (!data.chain || !data.coin) {
-          window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
-          return;
-        }
-        // data enthält { orderId, name, email, warenkorbWert }
-        setCustomerName(data.name);
-        setCustomerEmail(data.email);
-        setCartValueEUR(data.warenkorbWert);
-        setChainKey(data.chain)
-        setCoinKey(data.coin)
-        setUserId(data.userId)
+        // Normalisiere Chain-Key
+        const normChain = CHAIN_ALIAS[(data.chain || "").toUpperCase()] || (data.chain || "").toLowerCase();
+        setChainKey(normChain);
+        setCoinKey((data.coin || "").toUpperCase());
+
+        setCustomerName(data.name || "");
+        setCustomerEmail(data.email || "");
+        setCartValueEUR(Number(data.warenkorbWert || 0));
+        setUserId(data.userId || "");
+
+        // Bestellung ist valide
         setValidOrder(true);
+
+        // Timer (10 Min) starten, sobald valide
+        setTimer(600);
+        setTimerActive(true);
       } catch (e) {
         console.error("Validierungsfehler:", e);
-        window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+        const url = `${failUrl}${failUrl.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderIdParam)}&reason=verify_error`;
+        window.location.href = url;
       } finally {
         setValidating(false);
       }
     })();
   }, []);
 
-  // 7) 2. useEffect: CoinGecko-Live-Preisabruf (läuft nur, wenn Bestellung validiert ist)
+  /* ─────────────────────────────────────────────
+     7) CoinGecko-Preis abrufen (nur bei validOrder)
+     Guarded, damit kein "undefined.coins" mehr auftritt
+     ───────────────────────────────────────────── */
   useEffect(() => {
     if (!validOrder) return;
+
     async function fetchPrice() {
       try {
-        const coinId = chains[selectedChain].coins[selectedCoin].coingeckoId;
+        if (!chainKey || !coinKey) return;
+
+        const chainObj = chains[chainKey];
+        if (!chainObj) {
+          console.warn("[PRICE] Unbekannte Chain:", chainKey);
+          setError(`Unbekannte Chain: ${chainKey}`);
+          return;
+        }
+        const coinObj = chainObj.coins[coinKey];
+        if (!coinObj) {
+          console.warn("[PRICE] Coin nicht auf Chain verfügbar:", chainKey, coinKey);
+          setError(`Coin ${coinKey} auf ${chainObj.name} nicht unterstützt`);
+          return;
+        }
+
+        const coinId = coinObj.coingeckoId;
+        if (!coinId) {
+          setError("Kein Preis-Lookup für diesen Coin");
+          return;
+        }
+
         const res = await axios.get(
           `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur`
         );
         const eur = res.data[coinId]?.eur;
-        setPriceEUR(eur);
+        setPriceEUR(eur || null);
+
         if (eur && cartValueEUR > 0) {
           setCryptoAmount((cartValueEUR / eur).toFixed(6));
         }
@@ -199,70 +198,97 @@ function App() {
         setError("Fehler beim Abrufen des Kurses");
       }
     }
-    fetchPrice();
-  }, [validOrder, selectedChain, selectedCoin, cartValueEUR]);
 
-  // 8) 3. Countdown-Timer (tickt jede Sekunde, wenn validOrder=true)
+    fetchPrice();
+  }, [validOrder, chainKey, coinKey, cartValueEUR]);
+
+  /* ─────────────────────────────────────────────
+     8) Countdown (10 Minuten)
+     ───────────────────────────────────────────── */
   useEffect(() => {
     if (!timerActive) return;
     if (timer <= 0) {
       handleAbort();
       return;
     }
-    const interval = setTimeout(() => setTimer(timer - 1), 1000);
-    return () => clearTimeout(interval);
+    const t = setTimeout(() => setTimer((s) => s - 1), 1000);
+    return () => clearTimeout(t);
   }, [timer, timerActive]);
 
-  // 9) Wallet verbinden
+  function handleAbort() {
+    setTimerActive(false);
+    setTxStatus("");
+    setError("Zeit abgelaufen. Zahlung abgebrochen.");
+    const params = new URLSearchParams(window.location.search);
+    const fail = params.get("fail") || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+    const url = `${fail}${fail.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderId || '')}&reason=timeout`;
+    window.location.href = url;
+  }
+
+  /* ─────────────────────────────────────────────
+     9) Wallet verbinden – MetaMask priorisieren
+     ───────────────────────────────────────────── */
   async function connectWallet() {
     try {
-      const instance = await web3Modal.connect();
-      const prov = new ethers.BrowserProvider(instance);
-      const signerInstance = await prov.getSigner();
-      const addr = await signerInstance.getAddress();
-      const network = await prov.getNetwork();
+      setError("");
+      setTxStatus("");
 
-      setProvider(prov);
+      // 1) Wenn mehrere Provider injiziert sind → MetaMask bevorzugen
+      let ext = null;
+      const eth = typeof window !== 'undefined' ? window.ethereum : null;
+
+      if (eth && Array.isArray(eth.providers) && eth.providers.length) {
+        ext = eth.providers.find(p => p.isMetaMask) || eth.providers[0];
+      } else if (eth) {
+        ext = eth;
+      }
+
+      let provInstance;
+      if (ext) {
+        // Direkter Connect (MetaMask bevorzugt)
+        await ext.request({ method: "eth_requestAccounts" });
+        provInstance = new ethers.BrowserProvider(ext);
+      } else {
+        // Fallback: Web3Modal (z. B. WalletConnect/Mobile)
+        const instance = await web3Modal.connect();
+        provInstance = new ethers.BrowserProvider(instance);
+      }
+
+      const signerInstance = await provInstance.getSigner();
+      const addr = await signerInstance.getAddress();
+      const net = await provInstance.getNetwork();
+
+      setProvider(provInstance);
       setSigner(signerInstance);
       setAddress(addr);
-      setChainId(network.chainId);
+      setChainId(Number(net.chainId));
 
-      // Timer starten
-      setTimer(180);
-      setTimerActive(true);
-
-      // Event-Listener
-      instance.on("accountsChanged", (accounts) => setAddress(accounts[0]));
-      instance.on("chainChanged", (hex) => setChainId(parseInt(hex, 16)));
-      instance.on("disconnect", disconnectWallet);
+      // Events (nur wenn EIP-1193 Provider vorhanden)
+      const base = ext || (typeof window !== 'undefined' ? window.ethereum : null);
+      if (base && base.on) {
+        base.on("accountsChanged", (accounts) => setAddress(accounts?.[0] || ""));
+        base.on("chainChanged", (hex) => setChainId(parseInt(hex, 16)));
+        base.on("disconnect", disconnectWallet);
+      }
     } catch (e) {
       console.error("connectWallet-Fehler:", e);
       setError("Wallet-Verbindung fehlgeschlagen");
     }
   }
 
-  // 10) Wallet trennen
   function disconnectWallet() {
-    web3Modal.clearCachedProvider();
+    try { web3Modal.clearCachedProvider?.(); } catch(_) {}
     setProvider(null);
     setSigner(null);
     setAddress("");
     setChainId(null);
-    setTimerActive(false);
-    setTimer(180);
     setTxStatus("");
     setError("");
   }
 
-  // 11) Timer-Abbruch (falls Zeit abläuft)
-  function handleAbort() {
-    setTimerActive(false);
-    setTxStatus("");
-    setError("Zeit abgelaufen. Zahlung abgebrochen.");
-    window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
-  }
-
-  // 12) Zahlung absenden & POST-Request an Wix (nur wenn validOrder=false ist, alles validiert)
+  /* ─────────────────────────────────────────────
+     10) Zahlung ausführen
+     ───────────────────────────────────────────── */
   async function sendPayment() {
     setError("");
     setTxStatus("");
@@ -271,23 +297,30 @@ function App() {
       setError("Bitte Wallet verbinden");
       return;
     }
-    if (chainId !== chains[selectedChain].chainId) {
-      setError(`Bitte Wallet auf ${chains[selectedChain].name} umstellen`);
+
+    const chainCfg = chains[chainKey];
+    if (!chainCfg) {
+      setError(`Unbekannte Chain: ${chainKey}`);
       return;
     }
+    if (Number(chainId) !== Number(chainCfg.chainId)) {
+      setError(`Bitte Wallet auf ${chainCfg.name} umstellen`);
+      return;
+    }
+
     if (!cryptoAmount || isNaN(cryptoAmount) || Number(cryptoAmount) <= 0) {
       setError("Ungültiger Betrag");
       return;
     }
 
     try {
-      // 1) Signatur-Nachricht erstellen und signen
-      const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${selectedCoin}`;
+      // 1) Nachricht signieren (optional – Proof of Intent)
+      const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${coinKey} (Order ${orderId})`;
       await signer.signMessage(message);
 
-      // 2) Transaktion ausführen
+      // 2) Transaktion
       const recipient = "0xAD335dF958dDB7a9ce7073c38fE31CaC81111DAb";
-      const coinInfo = chains[selectedChain].coins[selectedCoin];
+      const coinInfo = chains[chainKey].coins[coinKey];
       let txResponse;
 
       setTxStatus("Transaktion läuft...");
@@ -295,53 +328,55 @@ function App() {
         // Native Coin (ETH/BNB/MATIC)
         txResponse = await signer.sendTransaction({
           to: recipient,
-          value: ethers.parseEther(cryptoAmount),
+          value: ethers.parseEther(String(cryptoAmount)),
         });
       } else {
-        // ERC20-Token
+        // ERC20
         const contract = new ethers.Contract(coinInfo.address, ERC20_ABI, signer);
         const decimals = await contract.decimals();
-        const value = ethers.parseUnits(cryptoAmount, decimals);
+        const value = ethers.parseUnits(String(cryptoAmount), decimals);
         txResponse = await contract.transfer(recipient, value);
       }
 
-      // 3) Auf Bestätigung der Transaktion warten
+      // 3) Warten auf Bestätigung
       const receipt = await txResponse.wait();
-      const txHash = receipt.transactionHash;
+      const txHash = receipt.transactionHash || txResponse.hash;
 
       setTxStatus("Zahlung bestätigt!");
 
-      // 4) Daten (inkl. orderId + token) an dein Wix-Backend senden
+      // 4) POST an Wix Backend
       await fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orderId: orderId,
-          token: token,
-          coin: selectedCoin,
-          chain: selectedChain,
+          orderId,
+          token,
+          coin: coinKey,
+          chain: chainKey,
           walletAdresse: address,
-          cryptoAmount: cryptoAmount,
-          txHash: txHash
+          cryptoAmount,
+          txHash
         }),
       });
 
-      // 5) Redirect bei Erfolg
-      window.location.href = "https://www.goldsilverstuff.com/zahlung-erfolgreich";
+      // 5) Success-Redirect
+      const params = new URLSearchParams(window.location.search);
+      const success = params.get("success") || "https://www.goldsilverstuff.com/zahlung-erfolgreich";
+      window.location.href = success;
     } catch (e) {
       console.error("sendPayment-Fehler:", e);
       setError("Zahlung fehlgeschlagen");
-      // Redirect bei Fehler
-      window.location.href = "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+      const params = new URLSearchParams(window.location.search);
+      const fail = params.get("fail") || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
+      const url = `${fail}${fail.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderId || '')}&reason=tx_failed`;
+      window.location.href = url;
     }
   }
 
-  // ───────────────────────────────────────────────────────────────────
-  // 13) JSX-Rendering
+  /* ─────────────────────────────────────────────
+     11) UI
+     ───────────────────────────────────────────── */
 
-  // Solange validating=true, noch nichts anzeigen (oder ein Loading)
   if (validating) {
     return (
       <div style={{ textAlign: "center", marginTop: 50 }}>
@@ -350,58 +385,48 @@ function App() {
     );
   }
 
-  // Wenn validOrder=false, würde bereits redirect passieren. Hier gilt: validOrder===true
+  const chainObj = chains[chainKey];
+
   return (
-    <div style={{ maxWidth: 480, margin: "auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
-      {/* Firmenlogo */}
+    <div style={{ maxWidth: 520, margin: "auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <img src="/logo.png" alt="Firmenlogo" style={{ maxWidth: 200 }} />
       </div>
 
       <h2>Web3 Checkout</h2>
 
-      {/* Kunden- und Bestelldaten */}
-      {customerName && (
-        <p>
-          <strong>Kunde:</strong> {customerName}
-        </p>
-      )}
-      {customerEmail && (
-        <p>
-          <strong>E-Mail:</strong> {customerEmail}
-        </p>
-      )}
-      {orderId && (
-        <p>
-          <strong>Bestell-ID:</strong> {orderId}
-        </p>
-      )}
+      {customerName && <p><strong>Kunde:</strong> {customerName}</p>}
+      {customerEmail && <p><strong>E-Mail:</strong> {customerEmail}</p>}
+      {orderId && <p><strong>Bestell-ID:</strong> {orderId}</p>}
+      <p><strong>Warenkorb:</strong> {cartValueEUR.toFixed(2)} EUR</p>
+
       <p>
-        <strong>Warenkorb:</strong> {cartValueEUR.toFixed(2)} EUR
-      </p>
-      <p>
-        <strong>Zeit verbleibend:</strong> {timerActive ? `${timer}s` : <span style={{ color: "#c00" }}>Inaktiv</span>}
+        <strong>Auswahl:</strong>{" "}
+        {coinKey || "—"} {chainObj ? `@ ${chainObj.name}` : chainKey || ""}
       </p>
 
-      {/* Live-Umrechnung anzeigen */}
+      <p><strong>Zeit verbleibend:</strong> {timerActive ? `${timer}s` : <span style={{ color: "#c00" }}>Inaktiv</span>}</p>
+
       <p>
-        <strong>Aktueller Preis (EUR):</strong> {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}
+        <strong>Aktueller Preis (EUR):</strong>{" "}
+        {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}
       </p>
       <p>
-        <strong>Betrag in {selectedCoin}:</strong> {cryptoAmount ? `${cryptoAmount} ${selectedCoin}` : "—"}
+        <strong>Betrag in {coinKey || "—"}:</strong>{" "}
+        {cryptoAmount ? `${cryptoAmount} ${coinKey}` : "—"}
       </p>
 
       <br />
 
-      {/* Wallet-Verbindung & Zahlung */}
       {!signer ? (
         <button onClick={connectWallet} style={{ padding: "10px 20px", cursor: "pointer" }}>
-          Wallet verbinden
+          Jetzt mit Wallet bezahlen
         </button>
       ) : (
         <>
           <p>
-            <strong>Verbunden mit:</strong> {address.slice(0, 6)}…{address.slice(-4)}
+            <strong>Verbunden mit:</strong>{" "}
+            {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "-"}
           </p>
           <button onClick={sendPayment} style={{ padding: "10px 20px", cursor: "pointer" }}>
             Zahlung senden
@@ -412,10 +437,8 @@ function App() {
         </>
       )}
 
-      <br />
-      <br />
+      <br /><br />
 
-      {/* Statusmeldungen */}
       {txStatus && <p style={{ color: "green" }}>{txStatus}</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
@@ -423,7 +446,7 @@ function App() {
 
       <p style={{ fontSize: "0.8em", color: "#555" }}>
         ⚠️ Kryptowährungen unterliegen starken Kursschwankungen und Zahlungen sind unwiderruflich. Bitte prüfe Chain &
-        Coin sorgfältig. Wir haften nicht für Fehlangaben oder falscher Wahl der Chain.
+        Coin sorgfältig. Wir haften nicht für Fehlangaben oder falsche Wahl der Chain.
       </p>
     </div>
   );
