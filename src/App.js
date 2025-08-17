@@ -127,7 +127,7 @@ function App() {
       try {
         const res = await fetch(
           `https://www.goldsilverstuff.com/_functions/web3zahlung?orderId=${encodeURIComponent(orderIdParam)}&token=${encodeURIComponent(tokenParam)}`,
-          { method: "GET", headers: { "Content-Type": "application/json" } }
+          { method: "GET", mode: "cors" } 
         );
         if (!res.ok) {
           const url = `${failUrl}${failUrl.includes('?') ? '&' : '?'}orderId=${encodeURIComponent(orderIdParam)}&reason=verify_failed_${res.status}`;
