@@ -298,7 +298,8 @@ function App() {
      10) Zahlung ausführen
      ───────────────────────────────────────────── */
 async function sendPayment() {
-  setError(""); setTxStatus("");
+  setError(""); 
+  setTxStatus("");
 
   const url = new URL(window.location.href);
   const successURL = url.searchParams.get("success") || "https://www.goldsilverstuff.com/zahlung-erfolgreich";
@@ -315,7 +316,8 @@ async function sendPayment() {
   }
 
   if (!cryptoAmount || isNaN(Number(cryptoAmount)) || Number(cryptoAmount) <= 0) {
-    setError("Ungültiger Betrag"); return;
+    setError("Ungültiger Betrag"); 
+    return;
   }
 
   // --- VALIDIERUNGEN ---
@@ -326,8 +328,8 @@ async function sendPayment() {
   try {
     const raw = String(chainConf.recipient || "")
       .trim()
-      .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");  // Zero-width chars killen
-    recipient = ethers.getAddress(raw.toLowerCase()); // lowercasen → checksum neu berechnen
+      .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");  // Zero-width chars entfernen
+    recipient = ethers.getAddress(raw.toLowerCase()); // normalisieren + Checksummenadresse
   } catch (e) {
     console.error("[PAY] Invalid recipient (normalized fail):", chainConf.recipient, e);
     setError("Interne Empfängeradresse ungültig. Bitte Support kontaktieren.");
@@ -369,7 +371,7 @@ async function sendPayment() {
     } else {
       // ERC-20 Transfer
       const contract = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
-      const decimals = await contract.decimals();          // sollte auf USDC (Polygon) 6 sein
+      const decimals = await contract.decimals();
       const value    = ethers.parseUnits(cryptoAmount, decimals);
       txResponse     = await contract.transfer(recipient, value);
     }
@@ -410,26 +412,32 @@ async function sendPayment() {
         posted = r2.ok;
       }
     } catch (_) {
-      // komplett ignorieren – Payment ist on-chain erfolgreich
+      // ignorieren – On-Chain ist bezahlt
     }
 
-    // IMMER zur Success-Seite; schicke tx & posted-Flag mit
-    const sep = successURL.includes("?") ? "&" : "?";
-    window.location.href = `${successURL}${sep}orderId=${encodeURIComponent(orderId)}&tx=${encodeURIComponent(txHash)}&posted=${posted ? 1 : 0}`;
+    // Immer zur Success-Seite; tx & posted-Flag mitgeben
+    const sep1 = successURL.includes("?") ? "&" : "?";
+    window.location.href = `${successURL}${sep1}orderId=${encodeURIComponent(orderId)}&tx=${encodeURIComponent(txHash)}&posted=${posted ? 1 : 0}`;
 
-    // Spezielles Mapping für deinen aktuellen Fehler
+  } catch (e) {
+    console.error("sendPayment ERROR:", e);
+
     let reason = "tx_failed";
     if (e && (e.code === 4001 || e.code === "ACTION_REJECTED")) reason = "user_rejected";
-    if (e && e.code === "BAD_DATA" && e.info && e.info.method === "resolver") {
-      reason = "bad_address"; // ENS-Resolver wurde fälschlich versucht -> Adresse war nicht valide
-    }
+    if (e && e.code === "BAD_DATA" && e.info && e.info.method === "resolver") reason = "bad_address";
 
     setError(e?.message || "Zahlung fehlgeschlagen");
 
-    const sep = failURL.includes("?") ? "&" : "?";
-    window.location.href = `${failURL}${sep}orderId=${encodeURIComponent(orderId)}&reason=${encodeURIComponent(reason)}`;
+    const sep2 = failURL.includes("?") ? "&" : "?";
+    window.location.href = `${failURL}${sep2}orderId=${encodeURIComponent(orderId)}&reason=${encodeURIComponent(reason)}`;
   }
 }
+
+
+  const chainConf = CHAINS[chainKey];
+  if (!chainConf) { setError(`Unbekannte Chain (${chainKey})`); return; }
+
+  if
 
 
   /* ─────────────────────────────────────────────
