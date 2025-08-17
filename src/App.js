@@ -39,13 +39,11 @@ const CHAINS = {
     recipient: RECIPIENT,
     coins: {
       MATIC: { address: null, coingeckoId: "matic-network" },
-      // ✅ richtige USDT-Adresse auf Polygon:
       USDT:  { address: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", coingeckoId: "tether" },
       USDC:  { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", coingeckoId: "usd-coin" },
       DAI:   { address: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", coingeckoId: "dai" },
       LINK:  { address: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39", coingeckoId: "chainlink" },
       AAVE:  { address: "0xd6df932a45c0f255f85145f286ea0b292b21c90b", coingeckoId: "aave" },
-      // Optional: ETH alias via WETH auf Polygon
       ETH:   { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", coingeckoId: "weth" },
       WETH:  { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", coingeckoId: "weth" },
     },
@@ -70,18 +68,18 @@ const ERC20_ABI = [
 ];
 
 function App() {
-  /* 3) URL-Parameter (orderId + token) */
+  // 3) URL-Parameter
   const [orderId, setOrderId] = useState("");
   const [token, setToken] = useState("");
 
-  /* 4) Bestelldaten vom Backend */
+  // 4) Bestelldaten
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [cartValueEUR, setCartValueEUR] = useState(0);
 
-  /* 5) Auswahl + State */
-  const [chainKey, setChainKey] = useState("");  // normalisiert (eth/bnb/matic)
-  const [coinKey, setCoinKey] = useState("");    // z.B. USDT
+  // 5) Auswahl + State
+  const [chainKey, setChainKey] = useState("");
+  const [coinKey, setCoinKey] = useState("");
   const [userId, setUserId] = useState("");
 
   const [validating, setValidating] = useState(true);
@@ -90,7 +88,7 @@ function App() {
   const [priceEUR, setPriceEUR] = useState(null);
   const [cryptoAmount, setCryptoAmount] = useState("");
 
-  // Timer 10 Minuten
+  // Timer
   const [timer, setTimer] = useState(600);
   const [timerActive, setTimerActive] = useState(false);
 
@@ -102,12 +100,9 @@ function App() {
   const [txStatus, setTxStatus] = useState("");
   const [error, setError] = useState("");
 
-  // Web3Modal: Cache aus, damit nicht Coinbase hängen bleibt
   const web3Modal = useMemo(() => new Web3Modal({ cacheProvider: false }), []);
 
-  /* ─────────────────────────────────────────────
-     6) URL-Params lesen + GET-Validierung
-     ───────────────────────────────────────────── */
+  // 6) GET-Validierung
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const orderIdParam = params.get("orderId");
@@ -136,7 +131,6 @@ function App() {
         }
         const data = await res.json();
 
-        // Normalisiere Chain-Key
         const normChain = CHAIN_ALIAS[(data.chain || "").toUpperCase()] || (data.chain || "").toLowerCase();
         setChainKey(normChain);
         setCoinKey((data.coin || "").toUpperCase());
@@ -146,10 +140,7 @@ function App() {
         setCartValueEUR(Number(data.warenkorbWert || 0));
         setUserId(data.userId || "");
 
-        // Bestellung ist valide
         setValidOrder(true);
-
-        // Timer (10 Min) starten, sobald valide
         setTimer(600);
         setTimerActive(true);
       } catch (e) {
@@ -162,62 +153,37 @@ function App() {
     })();
   }, []);
 
-  /* ─────────────────────────────────────────────
-     7) CoinGecko-Preis abrufen (nur bei validOrder)
-     ───────────────────────────────────────────── */
+  // 7) Preis laden
   useEffect(() => {
     if (!validOrder) return;
-
     async function fetchPrice() {
       try {
         if (!chainKey || !coinKey) return;
-
         const chainObj = CHAINS[chainKey];
-        if (!chainObj) {
-          console.warn("[PRICE] Unbekannte Chain:", chainKey);
-          setError(`Unbekannte Chain: ${chainKey}`);
-          return;
-        }
+        if (!chainObj) { setError(`Unbekannte Chain: ${chainKey}`); return; }
         const coinObj = chainObj.coins[coinKey];
-        if (!coinObj) {
-          console.warn("[PRICE] Coin nicht auf Chain verfügbar:", chainKey, coinKey);
-          setError(`Coin ${coinKey} auf ${chainObj.name} nicht unterstützt`);
-          return;
-        }
-
+        if (!coinObj) { setError(`Coin ${coinKey} auf ${chainObj.name} nicht unterstützt`); return; }
         const coinId = coinObj.coingeckoId;
-        if (!coinId) {
-          setError("Kein Preis-Lookup für diesen Coin");
-          return;
-        }
+        if (!coinId) { setError("Kein Preis-Lookup für diesen Coin"); return; }
 
         const res = await axios.get(
           `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=eur`
         );
         const eur = res.data[coinId]?.eur;
         setPriceEUR(eur || null);
-
-        if (eur && cartValueEUR > 0) {
-          setCryptoAmount((cartValueEUR / eur).toFixed(6));
-        }
+        if (eur && cartValueEUR > 0) setCryptoAmount((cartValueEUR / eur).toFixed(6));
       } catch (e) {
         console.error("Preisabruf-Fehler:", e);
         setError("Fehler beim Abrufen des Kurses");
       }
     }
-
     fetchPrice();
   }, [validOrder, chainKey, coinKey, cartValueEUR]);
 
-  /* ─────────────────────────────────────────────
-     8) Countdown (10 Minuten)
-     ───────────────────────────────────────────── */
+  // 8) Countdown
   useEffect(() => {
     if (!timerActive) return;
-    if (timer <= 0) {
-      handleAbort();
-      return;
-    }
+    if (timer <= 0) { handleAbort(); return; }
     const t = setTimeout(() => setTimer((s) => s - 1), 1000);
     return () => clearTimeout(t);
   }, [timer, timerActive]);
@@ -232,24 +198,17 @@ function App() {
     window.location.href = url;
   }
 
-  /* ─────────────────────────────────────────────
-     9) Wallet verbinden – MetaMask priorisieren
-     ───────────────────────────────────────────── */
+  // 9) Wallet connect
   async function connectWallet() {
     try {
-      setError("");
-      setTxStatus("");
-
-      // 1) Wenn mehrere Provider injiziert sind → MetaMask bevorzugen
+      setError(""); setTxStatus("");
       let ext = null;
       const eth = typeof window !== 'undefined' ? window.ethereum : null;
-
       if (eth && Array.isArray(eth.providers) && eth.providers.length) {
         ext = eth.providers.find(p => p.isMetaMask) || eth.providers[0];
       } else if (eth) {
         ext = eth;
       }
-
       let provInstance;
       if (ext) {
         await ext.request({ method: "eth_requestAccounts" });
@@ -258,17 +217,13 @@ function App() {
         const instance = await web3Modal.connect();
         provInstance = new ethers.BrowserProvider(instance);
       }
-
       const signerInstance = await provInstance.getSigner();
       const addr = await signerInstance.getAddress();
       const net = await provInstance.getNetwork();
-
       setProvider(provInstance);
       setSigner(signerInstance);
       setAddress(addr);
       setChainId(Number(net.chainId));
-
-      // Events
       const base = ext || (typeof window !== 'undefined' ? window.ethereum : null);
       if (base && base.on) {
         base.on("accountsChanged", (accounts) => setAddress(accounts?.[0] || ""));
@@ -283,49 +238,29 @@ function App() {
 
   function disconnectWallet() {
     try { web3Modal.clearCachedProvider?.(); } catch(_) {}
-    setProvider(null);
-    setSigner(null);
-    setAddress("");
-    setChainId(null);
-    setTxStatus("");
-    setError("");
+    setProvider(null); setSigner(null); setAddress(""); setChainId(null);
+    setTxStatus(""); setError("");
   }
 
-  /* ─────────────────────────────────────────────
-     10) Zahlung ausführen
-     ───────────────────────────────────────────── */
+  // 10) Zahlung
   async function sendPayment() {
-    setError("");
-    setTxStatus("");
-
+    setError(""); setTxStatus("");
     const url = new URL(window.location.href);
     const successURL = url.searchParams.get("success") || "https://www.goldsilverstuff.com/zahlung-erfolgreich";
     const failURL    = url.searchParams.get("fail")    || "https://www.goldsilverstuff.com/zahlung-fehlgeschlagen";
 
     if (!signer) { setError("Bitte Wallet verbinden"); return; }
-
     const chainConf = CHAINS[chainKey];
     if (!chainConf) { setError(`Unbekannte Chain (${chainKey})`); return; }
+    if (Number(chainId) !== Number(chainConf.chainId)) { setError(`Bitte Wallet auf ${chainConf.name} umstellen`); return; }
+    if (!cryptoAmount || isNaN(Number(cryptoAmount)) || Number(cryptoAmount) <= 0) { setError("Ungültiger Betrag"); return; }
 
-    if (Number(chainId) !== Number(chainConf.chainId)) {
-      setError(`Bitte Wallet auf ${chainConf.name} umstellen`);
-      return;
-    }
-
-    if (!cryptoAmount || isNaN(Number(cryptoAmount)) || Number(cryptoAmount) <= 0) {
-      setError("Ungültiger Betrag");
-      return;
-    }
-
-    // --- VALIDIERUNGEN ---
     const coinInfo = chainConf.coins?.[coinKey];
     if (!coinInfo) { setError(`Coin ${coinKey} auf ${chainKey} nicht konfiguriert`); return; }
 
     let recipient;
     try {
-      const raw = String(chainConf.recipient || "")
-        .trim()
-        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+      const raw = String(chainConf.recipient || "").trim().replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
       recipient = ethers.getAddress(raw.toLowerCase());
     } catch (e) {
       console.error("[PAY] Invalid recipient (normalized fail):", chainConf.recipient, e);
@@ -335,57 +270,32 @@ function App() {
 
     let tokenAddr = null;
     if (coinInfo.address !== null) {
-      const rawToken = String(coinInfo.address || "")
-        .trim()
-        .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
-      if (!ethers.isAddress(rawToken)) {
-        console.error("[PAY] Invalid token address:", rawToken);
-        setError(`Token-Adresse für ${coinKey} ungültig`);
-        return;
-      }
+      const rawToken = String(coinInfo.address || "").trim().replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+      if (!ethers.isAddress(rawToken)) { console.error("[PAY] Invalid token address:", rawToken); setError(`Token-Adresse für ${coinKey} ungültig`); return; }
       tokenAddr = ethers.getAddress(rawToken.toLowerCase());
     }
 
-    console.log("[PAY] tx debug", {
-      chainKey, coinKey, chainId, expectedChainId: chainConf.chainId,
-      recipient, tokenAddr, cryptoAmount
-    });
+    console.log("[PAY] tx debug", { chainKey, coinKey, chainId, expectedChainId: chainConf.chainId, recipient, tokenAddr, cryptoAmount });
 
     try {
-      // kleine Signatur zur Absicherung
       const message = `Zahlung ${cartValueEUR} EUR in ${cryptoAmount} ${coinKey} (Order ${orderId})`;
       await signer.signMessage(message);
 
       setTxStatus("Transaktion läuft…");
       let txResponse;
-
       if (tokenAddr === null) {
-        // Native Transfer
-        txResponse = await signer.sendTransaction({
-          to: recipient,
-          value: ethers.parseEther(cryptoAmount),
-        });
+        txResponse = await signer.sendTransaction({ to: recipient, value: ethers.parseEther(cryptoAmount) });
       } else {
-        // ERC-20 Transfer
         const contract = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
         const decimals = await contract.decimals();
-        const value    = ethers.parseUnits(cryptoAmount, decimals);
-        txResponse     = await contract.transfer(recipient, value);
+        const value = ethers.parseUnits(cryptoAmount, decimals);
+        txResponse = await contract.transfer(recipient, value);
       }
-
       const receipt = await txResponse.wait();
-      const txHash  = receipt.transactionHash;
+      const txHash = receipt.transactionHash;
       setTxStatus("Zahlung bestätigt!");
 
-      // Backend informieren (robust + CORS + Retry)
-      const payload = {
-        orderId, token,
-        coin: coinKey, chain: chainKey,
-        walletAdresse: address,
-        cryptoAmount,
-        txHash
-      };
-
+      const payload = { orderId, token, coin: coinKey, chain: chainKey, walletAdresse: address, cryptoAmount, txHash };
       async function postWebhook() {
         return fetch("https://www.goldsilverstuff.com/_functions/web3zahlung", {
           method: "POST",
@@ -395,47 +305,28 @@ function App() {
           body: JSON.stringify(payload),
         });
       }
-
       let posted = false;
       try {
-        const r1 = await postWebhook();
-        posted = r1.ok;
-        if (!posted) {
-          await new Promise(res => setTimeout(res, 600));
-          const r2 = await postWebhook();
-          posted = r2.ok;
-        }
-      } catch (_) {
-        // ignorieren – On-Chain bezahlt
-      }
+        const r1 = await postWebhook(); posted = r1.ok;
+        if (!posted) { await new Promise(r => setTimeout(r, 600)); const r2 = await postWebhook(); posted = r2.ok; }
+      } catch (_) { /* egal – on-chain bezahlt */ }
 
-      // Immer zur Success-Seite; tx & posted-Flag mitgeben
       const sep1 = successURL.includes("?") ? "&" : "?";
       window.location.href = `${successURL}${sep1}orderId=${encodeURIComponent(orderId)}&tx=${encodeURIComponent(txHash)}&posted=${posted ? 1 : 0}`;
-
     } catch (e) {
       console.error("sendPayment ERROR:", e);
-
       let reason = "tx_failed";
       if (e && (e.code === 4001 || e.code === "ACTION_REJECTED")) reason = "user_rejected";
       if (e && e.code === "BAD_DATA" && e.info && e.info.method === "resolver") reason = "bad_address";
-
       setError(e?.message || "Zahlung fehlgeschlagen");
-
       const sep2 = failURL.includes("?") ? "&" : "?";
       window.location.href = `${failURL}${sep2}orderId=${encodeURIComponent(orderId)}&reason=${encodeURIComponent(reason)}`;
     }
   }
 
-  /* ─────────────────────────────────────────────
-     11) UI
-     ───────────────────────────────────────────── */
+  // 11) UI
   if (validating) {
-    return (
-      <div style={{ textAlign: "center", marginTop: 50 }}>
-        <p>Lade Bestelldaten…</p>
-      </div>
-    );
+    return (<div style={{ textAlign: "center", marginTop: 50 }}><p>Lade Bestelldaten…</p></div>);
   }
 
   const chainObj = CHAINS[chainKey];
@@ -445,61 +336,31 @@ function App() {
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <img src="/logo.png" alt="Firmenlogo" style={{ maxWidth: 200 }} />
       </div>
-
       <h2>Web3 Checkout</h2>
-
       {customerName && <p><strong>Kunde:</strong> {customerName}</p>}
       {customerEmail && <p><strong>E-Mail:</strong> {customerEmail}</p>}
       {orderId && <p><strong>Bestell-ID:</strong> {orderId}</p>}
       <p><strong>Warenkorb:</strong> {cartValueEUR.toFixed(2)} EUR</p>
-
-      <p>
-        <strong>Auswahl:</strong>{" "}
-        {coinKey || "—"} {chainObj ? `@ ${chainObj.name}` : (chainKey || "")}
-      </p>
-
+      <p><strong>Auswahl:</strong> {coinKey || "—"} {chainObj ? `@ ${chainObj.name}` : (chainKey || "")}</p>
       <p><strong>Zeit verbleibend:</strong> {timerActive ? `${timer}s` : <span style={{ color: "#c00" }}>Inaktiv</span>}</p>
-
-      <p>
-        <strong>Aktueller Preis (EUR):</strong>{" "}
-        {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}
-      </p>
-      <p>
-        <strong>Betrag in {coinKey || "—"}:</strong>{" "}
-        {cryptoAmount ? `${cryptoAmount} ${coinKey}` : "—"}
-      </p>
-
+      <p><strong>Aktueller Preis (EUR):</strong> {priceEUR ? `${priceEUR.toFixed(2)} EUR` : "Lade..."}</p>
+      <p><strong>Betrag in {coinKey || "—"}:</strong> {cryptoAmount ? `${cryptoAmount} ${coinKey}` : "—"}</p>
       <br />
-
       {!signer ? (
-        <button onClick={connectWallet} style={{ padding: "10px 20px", cursor: "pointer" }}>
-          Jetzt mit Wallet bezahlen
-        </button>
+        <button onClick={connectWallet} style={{ padding: "10px 20px", cursor: "pointer" }}>Jetzt mit Wallet bezahlen</button>
       ) : (
         <>
-          <p>
-            <strong>Verbunden mit:</strong>{" "}
-            {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "-"}
-          </p>
-          <button onClick={sendPayment} style={{ padding: "10px 20px", cursor: "pointer" }}>
-            Zahlung senden
-          </button>
-          <button onClick={disconnectWallet} style={{ marginLeft: 10, padding: "10px 20px", cursor: "pointer" }}>
-            Wallet trennen
-          </button>
+          <p><strong>Verbunden mit:</strong> {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "-"}</p>
+          <button onClick={sendPayment} style={{ padding: "10px 20px", cursor: "pointer" }}>Zahlung senden</button>
+          <button onClick={disconnectWallet} style={{ marginLeft: 10, padding: "10px 20px", cursor: "pointer" }}>Wallet trennen</button>
         </>
       )}
-
       <br /><br />
-
       {txStatus && <p style={{ color: "green" }}>{txStatus}</p>}
       {error && <p style={{ color: "red" }}>{error}</p>}
-
       <hr />
-
       <p style={{ fontSize: "0.8em", color: "#555" }}>
-        ⚠️ Kryptowährungen unterliegen starken Kursschwankungen und Zahlungen sind unwiderruflich. Bitte prüfe Chain &
-        Coin sorgfältig. Wir haften nicht für Fehlangaben oder falsche Wahl der Chain.
+        ⚠️ Kryptowährungen unterliegen starken Kursschwankungen und Zahlungen sind unwiderruflich. Bitte prüfe Chain & Coin sorgfältig.
       </p>
     </div>
   );
