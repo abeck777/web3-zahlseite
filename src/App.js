@@ -4,7 +4,7 @@ import Web3Modal from "web3modal";
 import axios from "axios";
 
 // Händler-Wallet (gleiche Adresse auf allen Chains ok)
-const RECIPIENT = "0x3cfDe8c9a3F1804aa9828BE38a966762d98DCeD1";
+const RECIPIENT = "0x3cfde8c9a3f1804aa9828be38a966762d98dced1";
 
 /* 1) CHAINS + Mapping für eingehende Keys */
 const CHAINS = {
@@ -324,23 +324,27 @@ async function sendPayment() {
 
   let recipient;
   try {
-    recipient = ethers.getAddress(chainConf.recipient); // wirft bei ungültig
-  } catch {
-    console.error("[PAY] Invalid recipient:", chainConf.recipient);
+    const raw = String(chainConf.recipient || "")
+      .trim()
+      .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");  // Zero-width chars killen
+    recipient = ethers.getAddress(raw.toLowerCase()); // lowercasen → checksum neu berechnen
+  } catch (e) {
+    console.error("[PAY] Invalid recipient (normalized fail):", chainConf.recipient, e);
     setError("Interne Empfängeradresse ungültig. Bitte Support kontaktieren.");
     return;
   }
 
   let tokenAddr = null;
-  if (coinInfo.address === null) {
-    // native Coin (ETH/BNB/MATIC)
-  } else {
-    if (!ethers.isAddress(coinInfo.address)) {
-      console.error("[PAY] Invalid token address:", coinInfo.address);
+  if (coinInfo.address !== null) {
+    const rawToken = String(coinInfo.address || "")
+      .trim()
+      .replace(/\u200B|\u200C|\u200D|\uFEFF/g, "");
+    if (!ethers.isAddress(rawToken)) {
+      console.error("[PAY] Invalid token address:", rawToken);
       setError(`Token-Adresse für ${coinKey} ungültig`);
       return;
     }
-    tokenAddr = ethers.getAddress(coinInfo.address); // normalisiert (Checksum)
+    tokenAddr = ethers.getAddress(rawToken.toLowerCase());
   }
 
   console.log("[PAY] tx debug", {
