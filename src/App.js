@@ -376,8 +376,14 @@ function App() {
       }
 
       const receipt = await txResponse.wait();
-      const txHash = receipt.transactionHash;
-      setTxStatus("Zahlung bestätigt!");
+      // robust für v5/v6 und native + ERC20
+      const txHash =
+        (txResponse && (txResponse.hash || txResponse.transactionHash)) ||
+        (receipt && (receipt.hash || receipt.transactionHash));
+
+      if (!txHash) {
+        console.error("[PAY] NO TX HASH", { txResponse, receipt });
+      }
 
       // Webhook POST (2 Versuche)
       const payload = {
@@ -411,17 +417,28 @@ function App() {
         // Falls Netzwerk blockt: nicht kritisch – On-Chain ist bezahlt
       }
 
-      const sep1 = successURL.includes("?") ? "&" : "?";
-      const successParams =
-        `orderId=${encodeURIComponent(orderId)}` +
-        `&tx=${encodeURIComponent(txHash)}` +
-        `&posted=${posted ? 1 : 0}` +
-        `&coin=${encodeURIComponent(coinKey)}` +
-        `&chain=${encodeURIComponent(chainKey)}` +
-        `&wallet=${encodeURIComponent(address)}` +
-        `&amount=${encodeURIComponent(String(cryptoAmount))}` +
-        `&token=${encodeURIComponent(token)}`;
-      window.location.href = `${successURL}${sep1}${successParams}`;
+      // Einheitliche Großschreibung in der URL (für Anzeige/Parsing)
+      const coinParam  = String(coinKey || "").toUpperCase();
+      const chainParam = String(chainKey || "").toUpperCase();
+
+      // Erfolg-URL mit URL-API, damit keine Duplikate entstehen
+      const u = new URL(successURL);
+
+      // orderId nicht doppelt setzen
+      if (!u.searchParams.has("orderId")) u.searchParams.set("orderId", orderId);
+
+      // alle weiteren Parameter setzen/überschreiben
+      u.searchParams.set("tx", txHash || "");
+      u.searchParams.set("posted", posted ? "1" : "0");
+      u.searchParams.set("coin", coinParam);
+      u.searchParams.set("chain", chainParam);
+      u.searchParams.set("wallet", address || "");
+      u.searchParams.set("amount", String(cryptoAmount || ""));
+      u.searchParams.set("token", token || "");
+
+      // Redirect
+      window.location.href = u.toString();
+      
     } catch (e) {
       console.error("sendPayment ERROR:", e);
       let reason = "tx_failed";
