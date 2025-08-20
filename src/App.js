@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { ethers } from "ethers";
 import Web3Modal from "web3modal";
 import axios from "axios";
-import { useRef } from "react";
 
 function safeUrl(raw, fallbackPath) {
   try {
@@ -112,6 +111,7 @@ function App() {
   const web3ModalRef = useRef(null);
   const providerRef = useRef(null);
   const signerRef = useRef(null);
+  const providerNameRef = useRef("Wallet");
   const [address, setAddress] = useState("");
   const [chainId, setChainId] = useState(null);
 
@@ -256,7 +256,7 @@ function App() {
   async function connectWallet() {
     try {
       setError(""); setTxStatus("");
-      const providerRef = useRef("");
+      providerNameRef.current = provLabel;
       // MetaMask / EIP-6963
       let ext = null;
       const eth = typeof window !== "undefined" ? window.ethereum : null;
@@ -295,7 +295,7 @@ function App() {
      else if (ext?.isOkxWallet) provLabel = "OKX";
      else if (!ext) provLabel = "Walletconnect"; // Web3Modal-Fallback
 
-     setProviderName(provLabel);
+     providerNameRef.current = provLabel;
 
       const base = ext || (typeof window !== "undefined" ? window.ethereum : null);
       if (base && base.on) {
@@ -418,7 +418,7 @@ function App() {
         // NEU: vollständige Verbuchung
         totalEUR: Number(cartValueEUR || 0),
         paymentMethod: "Web3-Direct",
-        provider: providerName || "Wallet",
+        provider: providerNameRef.current || "Wallet",
         providerTxId: txHash,
 
         fxSource: "coingecko",
