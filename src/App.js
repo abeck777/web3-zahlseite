@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ethers } from "ethers";
 import Web3Modal from "web3modal";
 import axios from "axios";
+import { useRef } from "react";
 
 function safeUrl(raw, fallbackPath) {
   try {
@@ -255,7 +256,7 @@ function App() {
   async function connectWallet() {
     try {
       setError(""); setTxStatus("");
-      const [providerName, setProviderName] = useState("");
+      const providerRef = useRef("");
       // MetaMask / EIP-6963
       let ext = null;
       const eth = typeof window !== "undefined" ? window.ethereum : null;
