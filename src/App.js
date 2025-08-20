@@ -255,7 +255,7 @@ function App() {
   async function connectWallet() {
     try {
       setError(""); setTxStatus("");
-
+      const [providerName, setProviderName] = useState("");
       // MetaMask / EIP-6963
       let ext = null;
       const eth = typeof window !== "undefined" ? window.ethereum : null;
@@ -276,7 +276,7 @@ function App() {
         const instance = await web3ModalRef.current.connect();
         providerInstance = new ethers.BrowserProvider(instance);
       }
-
+      
       const signerInstance = await providerInstance.getSigner();
       const addr = await signerInstance.getAddress();
       const net = await providerInstance.getNetwork();
@@ -285,6 +285,16 @@ function App() {
       signerRef.current = signerInstance;
       setAddress(addr);
       setChainId(Number(net.chainId));
+
+
+     let provLabel = "Wallet";
+     if (ext?.isMetaMask) provLabel = "MetaMask";
+     else if (ext?.isCoinbaseWallet) provLabel = "Coinbase";
+     else if (ext?.isTrust) provLabel = "Trust";
+     else if (ext?.isOkxWallet) provLabel = "OKX";
+     else if (!ext) provLabel = "Walletconnect"; // Web3Modal-Fallback
+
+     setProviderName(provLabel);
 
       const base = ext || (typeof window !== "undefined" ? window.ethereum : null);
       if (base && base.on) {
@@ -376,24 +386,49 @@ function App() {
       }
 
       const receipt = await txResponse.wait();
-      // robust für v5/v6 und native + ERC20
+      // robuster TX-Hash (v5/v6, native/ERC20)
       const txHash =
         (txResponse && (txResponse.hash || txResponse.transactionHash)) ||
-        (receipt && (receipt.hash || receipt.transactionHash));
+        (receipt && (receipt.hash || receipt.transactionHash)) || "";
 
-      if (!txHash) {
-        console.error("[PAY] NO TX HASH", { txResponse, receipt });
-      }
+      // Netzwerkgebühr in ETH schätzen (falls verfügbar)
+      let networkFeeEth = null;
+      try {
+        if (receipt?.fee) {
+          // ethers v6
+          networkFeeEth = ethers.formatEther(receipt.fee);
+        } else if (receipt?.gasUsed && txResponse?.gasPrice) {
+          // ethers v5
+          networkFeeEth = ethers.formatEther(receipt.gasPrice * receipt.gasUsed);
+        }
+      } catch(_) {}
+      const networkFeeEur = (networkFeeEth && priceEUR) ? Number(networkFeeEth) * Number(priceEUR) : null;
 
       // Webhook POST (2 Versuche)
       const payload = {
         orderId,
         token,
-        coin: coinKey,
-        chain: chainKey,
+        coin: String(coinKey).toUpperCase(),
+        chain: String(chainKey).toUpperCase(),
         walletAdresse: address,
-        cryptoAmount: String(cryptoAmount),
+        cryptoAmount,
         txHash,
+
+        // NEU: vollständige Verbuchung
+        totalEUR: Number(cartValueEUR || 0),
+        paymentMethod: "Web3-Direct",
+        provider: providerName || "Wallet",
+        providerTxId: txHash,
+
+        fxSource: "coingecko",
+        fxRateEurPerUnit: priceEUR || null,
+        fxTimestampUtc: new Date().toISOString(),
+
+        networkFeeEur: networkFeeEur || 0,
+        providerFeesEur: 0,
+        netReceivedEur: Number(cartValueEUR || 0) - (networkFeeEur || 0),
+
+        userId // falls aus GET /web3zahlung vorhanden
       };
 
       async function postWebhook() {
@@ -438,7 +473,7 @@ function App() {
 
       // Redirect
       window.location.href = u.toString();
-      
+
     } catch (e) {
       console.error("sendPayment ERROR:", e);
       let reason = "tx_failed";
