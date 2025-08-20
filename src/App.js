@@ -256,7 +256,7 @@ function App() {
   async function connectWallet() {
     try {
       setError(""); setTxStatus("");
-      providerNameRef.current = provLabel;
+      
       // MetaMask / EIP-6963
       let ext = null;
       const eth = typeof window !== "undefined" ? window.ethereum : null;
