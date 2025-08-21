@@ -288,12 +288,9 @@ function App() {
       setChainId(Number(net.chainId));
 
 
-     let provLabel = "Wallet";
+     let provLabel = "Walletconnect";
      if (ext?.isMetaMask) provLabel = "MetaMask";
      else if (ext?.isCoinbaseWallet) provLabel = "Coinbase";
-     else if (ext?.isTrust) provLabel = "Trust";
-     else if (ext?.isOkxWallet) provLabel = "OKX";
-     else if (!ext) provLabel = "Walletconnect"; // Web3Modal-Fallback
 
      providerNameRef.current = provLabel;
 
@@ -471,6 +468,20 @@ function App() {
       u.searchParams.set("wallet", address || "");
       u.searchParams.set("amount", String(cryptoAmount || ""));
       u.searchParams.set("token", token || "");
+
+      // Metadaten für Fallback /web3confirm mitgeben:
+      u.searchParams.set("totalEur", String(Number(cartValueEUR || 0)));
+      u.searchParams.set("pm", "Web3-Direct"); // Zahlungsmethode
+      u.searchParams.set("provider", providerNameRef.current || "Walletconnect");
+      u.searchParams.set("providerTxId", txHash || "");
+
+      // FX / Fees
+      u.searchParams.set("fxSource", "CoinGecko"); // schön formatiert
+      u.searchParams.set("fxRate", priceEUR != null ? String(priceEUR) : "");
+      u.searchParams.set("fxTimestampUtc", new Date().toISOString());
+      u.searchParams.set("networkFeeEur", networkFeeEur != null ? String(networkFeeEur) : "");
+      u.searchParams.set("providerFeesEur", "0");
+      u.searchParams.set("netReceivedEur", String(Number(cartValueEUR || 0) - Number(networkFeeEur || 0)));
 
       // Redirect
       window.location.href = u.toString();
